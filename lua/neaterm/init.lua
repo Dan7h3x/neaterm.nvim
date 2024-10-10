@@ -1,44 +1,61 @@
 local api = vim.api
 local fn = vim.fn
 
+-- Define the Neaterm module
 local Neaterm = {}
 Neaterm.__index = Neaterm
 
+-- Default configuration options
 local default_opts = {
   shell = vim.o.shell,
   float_width = 0.8,
   float_height = 0.3,
+  move_amount = 3,   -- Default amount to move floating terminal
+  resize_amount = 2, -- Default amount to resize floating terminal
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
-    new_horizontal = '<C-|>',
+    new_horizontal = '<C-.>',
     new_float = '<C-A-t>',
     close = '<C-d>',
     next = '<C-PageDown>',
     prev = '<C-PageUp>',
+    move_up = '<C-A-Up>',
+    move_down = '<C-A-Down>',
+    move_left = '<C-A-Left>',
+    move_right = '<C-A-Right>',
+    resize_up = '<C-S-Up>',
+    resize_down = '<C-S-Down>',
+    resize_left = '<C-S-Left>',
+    resize_right = '<C-S-Right>',
   },
 }
 
-function Neaterm.new(opts)
+-- Constructor for Neaterm
+function Neaterm.new(user_opts)
   local self = setmetatable({}, Neaterm)
   self.terminals = {}
   self.current_terminal = nil
-  self.opts = vim.tbl_deep_extend("force", default_opts, opts or {})
+  -- Merge user options with default options
+  self.opts = vim.tbl_deep_extend("force", default_opts, user_opts or {})
   return self
 end
 
+-- Create a new terminal
 function Neaterm:create_terminal(opts)
   opts = opts or {}
 
+  -- Create a new buffer for the terminal
   local buf = api.nvim_create_buf(false, true)
-  api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
-  api.nvim_set_option_value('bufhidden', 'hide', { buf = buf })
+  api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
+  api.nvim_buf_set_option(buf, 'bufhidden', 'hide')
 
   local win
   if opts.type == 'float' then
+    -- Create a floating window for the terminal
     local width = math.floor(vim.o.columns * self.opts.float_width)
     local height = math.floor(vim.o.lines * self.opts.float_height)
-    local row = vim.o.lines - height - 2
+    local row = vim.o.lines - height - 4
     local col = math.floor((vim.o.columns - width) / 2)
 
     win = api.nvim_open_win(buf, true, {
@@ -51,28 +68,34 @@ function Neaterm:create_terminal(opts)
       border = 'single'
     })
   elseif opts.type == 'full' then
+    -- Create a full-screen terminal
     vim.cmd('enew')
     win = api.nvim_get_current_win()
     api.nvim_win_set_buf(win, buf)
   else
+    -- Create a split terminal (vertical or horizontal)
     vim.cmd(opts.type == 'vertical' and 'vsplit' or 'split')
     win = api.nvim_get_current_win()
     api.nvim_win_set_buf(win, buf)
   end
 
+  -- Open the terminal in the buffer
   local term_id = fn.termopen(self.opts.shell, {
     on_exit = function() self:cleanup_terminal(buf) end
   })
 
+  -- Store terminal information
   self.terminals[buf] = { window = win, job_id = term_id, type = opts.type }
   self.current_terminal = buf
 
   self:setup_terminal_settings(win, buf)
 
   vim.cmd('startinsert')
+  self:update_bar()
   return buf
 end
 
+-- Set up terminal-specific settings
 function Neaterm:setup_terminal_settings(win, buf)
   vim.wo[win].number = false
   vim.wo[win].relativenumber = false
@@ -82,6 +105,7 @@ function Neaterm:setup_terminal_settings(win, buf)
   self:setup_autocommands(buf)
 end
 
+-- Set up keymaps for a terminal buffer
 function Neaterm:setup_keymaps(buf)
   local opts = { noremap = true, silent = true, buffer = buf }
 
@@ -92,6 +116,7 @@ function Neaterm:setup_keymaps(buf)
   vim.keymap.set('n', self.opts.keymaps.close, function() self:close_terminal() end, opts)
 end
 
+-- Set up autocommands for a terminal buffer
 function Neaterm:setup_autocommands(buf)
   api.nvim_create_autocmd("TermClose", {
     buffer = buf,
@@ -105,6 +130,7 @@ function Neaterm:setup_autocommands(buf)
   })
 end
 
+-- Toggle between normal and terminal mode
 function Neaterm:toggle_normal_mode()
   local mode = api.nvim_get_mode().mode
   if mode == 't' then
@@ -114,6 +140,7 @@ function Neaterm:toggle_normal_mode()
   end
 end
 
+-- Hide the current terminal
 function Neaterm:hide_terminal()
   if self.current_terminal then
     local win = self.terminals[self.current_terminal].window
@@ -121,6 +148,7 @@ function Neaterm:hide_terminal()
   end
 end
 
+-- Show a specific terminal
 function Neaterm:show_terminal(buf)
   if self.terminals[buf] then
     local terminal = self.terminals[buf]
@@ -149,6 +177,7 @@ function Neaterm:show_terminal(buf)
   end
 end
 
+-- Close a terminal
 function Neaterm:close_terminal(buf)
   buf = buf or self.current_terminal
   if buf then
@@ -166,13 +195,17 @@ function Neaterm:close_terminal(buf)
       end
     end
   end
+  self:update_bar()
 end
 
+-- Cleanup terminal on exit
 function Neaterm:cleanup_terminal(buf)
   self:close_terminal(buf)
 end
 
+-- Set up the plugin
 function Neaterm:setup()
+  -- Create user commands
   local function create_command(name, callback)
     api.nvim_create_user_command(name, function(opts)
       callback(opts.args)
@@ -187,6 +220,7 @@ function Neaterm:setup()
   create_command('NeatermNext', function() self:next_terminal() end)
   create_command('NeatermPrev', function() self:prev_terminal() end)
 
+  -- Set up global keymaps
   local opts = { noremap = true, silent = true }
   vim.keymap.set('n', self.opts.keymaps.toggle, '<CMD>NeatermToggle<CR>', opts)
   vim.keymap.set('n', self.opts.keymaps.new_vertical, '<CMD>NeatermVertical<CR>', opts)
@@ -195,9 +229,11 @@ function Neaterm:setup()
   vim.keymap.set('n', self.opts.keymaps.next, '<CMD>NeatermNext<CR>', opts)
   vim.keymap.set('n', self.opts.keymaps.prev, '<CMD>NeatermPrev<CR>', opts)
 
+  -- Set up highlighting
   api.nvim_set_hl(0, 'NeatermNormal', { link = 'Normal', default = true })
   api.nvim_set_hl(0, 'NeatermBorder', { link = 'FloatBorder', default = true })
 
+  -- Set up filetype detection
   api.nvim_create_autocmd("FileType", {
     pattern = "neaterm",
     callback = function()
@@ -209,6 +245,7 @@ function Neaterm:setup()
     end
   })
 
+  -- Automatically clear untitled buffers on VimLeave
   api.nvim_create_autocmd("VimLeave", {
     callback = function()
       for buf, _ in pairs(self.terminals) do
@@ -218,8 +255,16 @@ function Neaterm:setup()
       end
     end
   })
+
+  -- Set up move keymaps
+  self:setup_move_resize_keymaps()
+
+
+  -- Create the status bar
+  self:create_bar()
 end
 
+-- Toggle terminal visibility
 function Neaterm:toggle_terminal()
   if self.current_terminal then
     local terminal = self.terminals[self.current_terminal]
@@ -238,24 +283,192 @@ function Neaterm:toggle_terminal()
   end
 end
 
+-- Switch to the next terminal
 function Neaterm:next_terminal()
   local terminals = vim.tbl_keys(self.terminals)
   if #terminals > 1 then
     local current_index = vim.tbl_contains(terminals, self.current_terminal) and
-        vim.tbl_index(terminals, self.current_terminal) or 0
+        self:tbl_index(terminals, self.current_terminal) or 0
     local next_index = (current_index % #terminals) + 1
     self:show_terminal(terminals[next_index])
   end
 end
 
+-- Switch to the previous terminal
 function Neaterm:prev_terminal()
   local terminals = vim.tbl_keys(self.terminals)
   if #terminals > 1 then
     local current_index = vim.tbl_contains(terminals, self.current_terminal) and
-        vim.tbl_index(terminals, self.current_terminal) or 0
+        self:tbl_index(terminals, self.current_terminal) or 0
     local prev_index = ((current_index - 2 + #terminals) % #terminals) + 1
     self:show_terminal(terminals[prev_index])
   end
+end
+
+-- Helper function to find index in a table
+function Neaterm:tbl_index(tbl, value)
+  for i, v in ipairs(tbl) do
+    if v == value then
+      return i
+    end
+  end
+  return nil
+end
+
+function Neaterm:resize_float(direction)
+  if not self.current_terminal or self.terminals[self.current_terminal].type ~= 'float' then
+    return
+  end
+
+  local win = self.terminals[self.current_terminal].window
+  if not api.nvim_win_is_valid(win) then
+    return
+  end
+
+  local config = api.nvim_win_get_config(win)
+  local resize_amount = tonumber(self.opts.resize_amount) or 2
+
+  if direction == 'up' then
+    config.height = math.max(1, config.height - resize_amount)
+  elseif direction == 'down' then
+    config.height = math.min(vim.o.lines - config.row - 1, config.height + resize_amount)
+  elseif direction == 'left' then
+    config.width = math.max(1, config.width - resize_amount)
+  elseif direction == 'right' then
+    config.width = math.min(vim.o.columns - config.col - 1, config.width + resize_amount)
+  end
+
+  api.nvim_win_set_config(win, config)
+end
+
+-- Set up keymaps for moving and resizing floating terminal
+function Neaterm:setup_move_resize_keymaps()
+  local opts = { noremap = true, silent = true }
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.move_up, function() self:move_float('up') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.move_down, function() self:move_float('down') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.move_left, function() self:move_float('left') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.move_right, function() self:move_float('right') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.resize_up, function() self:resize_float('up') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.resize_down, function() self:resize_float('down') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.resize_left, function() self:resize_float('left') end, opts)
+  vim.keymap.set({ 'n', 't' }, self.opts.keymaps.resize_right, function() self:resize_float('right') end, opts)
+end
+
+-- Move floating terminal
+function Neaterm:move_float(direction)
+  -- Check if current terminal exists and is a floating terminal
+  if not self.current_terminal or self.terminals[self.current_terminal].type ~= 'float' then
+    return
+  end
+
+  local win = self.terminals[self.current_terminal].window
+  -- Check if the window is valid
+  if not api.nvim_win_is_valid(win) then
+    return
+  end
+
+  local config = api.nvim_win_get_config(win)
+  -- Ensure move_amount is a number, default to 3 if not set
+  local move_amount = tonumber(self.opts.move_amount) or 3
+
+  -- Adjust the position based on the direction
+  if direction == 'up' then
+    config.row = math.max(0, config.row - move_amount)
+  elseif direction == 'down' then
+    config.row = math.min(vim.o.lines - config.height - 1, config.row + move_amount)
+  elseif direction == 'left' then
+    config.col = math.max(0, config.col - move_amount)
+  elseif direction == 'right' then
+    config.col = math.min(vim.o.columns - config.width - 1, config.col + move_amount)
+  end
+
+  -- Apply the new configuration
+  api.nvim_win_set_config(win, config)
+end
+
+function Neaterm:create_bar()
+  self.bar_buf = api.nvim_create_buf(false, true)
+  api.nvim_buf_set_option(self.bar_buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(self.bar_buf, 'bufhidden', 'hide')
+  api.nvim_buf_set_option(self.bar_buf, 'swapfile', false)
+
+  local width = 20
+  local height = 1
+  local row = 1
+  local col = vim.o.columns - width - 1
+
+  self.bar_win = api.nvim_open_win(self.bar_buf, false, {
+    relative = 'editor',
+    width = width,
+    height = height,
+    row = row,
+    col = col,
+    style = 'minimal',
+    border = 'single'
+  })
+
+  api.nvim_win_set_option(self.bar_win, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')
+
+  self:update_bar()
+
+  -- Set up mouse click handling for the bar
+  vim.keymap.set('n', '<C-LeftMouse>', function()
+    local mouse_pos = vim.fn.getmousepos()
+    if mouse_pos.winid == self.bar_win then
+      local col = mouse_pos.column
+      local term_index = math.floor(col / 2)
+      local terminals = vim.tbl_keys(self.terminals)
+      if term_index > 0 and term_index <= #terminals then
+        self:show_terminal(terminals[term_index])
+      end
+    end
+  end, { silent = true })
+end
+
+function Neaterm:update_bar()
+  local terminals = vim.tbl_keys(self.terminals)
+
+  if #terminals == 0 then
+    if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
+      api.nvim_win_close(self.bar_win, true)
+      self.bar_win = nil
+    end
+    return
+  end
+
+  if not self.bar_win or not api.nvim_win_is_valid(self.bar_win) then
+    self:create_bar()
+    return
+  end
+
+  if not self.bar_buf or not api.nvim_buf_is_valid(self.bar_buf) then
+    return
+  end
+
+  local bar_content = {}
+  for i, term in ipairs(terminals) do
+    if term == self.current_terminal then
+      table.insert(bar_content, '[' .. i .. ']')
+    else
+      table.insert(bar_content, ' ' .. i .. ' ')
+    end
+  end
+
+  local bar_text = table.concat(bar_content, ' ')
+  api.nvim_buf_set_lines(self.bar_buf, 0, -1, false, { bar_text })
+
+  local width = #bar_text
+  if width == 0 then
+    width = 1 -- Ensure width is always at least 1
+  end
+
+  api.nvim_win_set_config(self.bar_win, {
+    relative = 'editor',
+    width = width,
+    height = 1,
+    row = 1,
+    col = vim.o.columns - width - 1,
+  })
 end
 
 return Neaterm

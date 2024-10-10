@@ -1,0 +1,107 @@
+*neaterm.txt*  A neat terminal plugin for Neovim
+
+==============================================================================
+CONTENTS                                                    *neaterm-contents*
+
+    1. Introduction ........................... |neaterm-introduction|
+    2. Installation ........................... |neaterm-installation|
+    3. Usage .................................. |neaterm-usage|
+    4. Commands ............................... |neaterm-commands|
+    5. Keymaps ................................ |neaterm-keymaps|
+    6. Configuration .......................... |neaterm-configuration|
+
+==============================================================================
+1. Introduction                                         *neaterm-introduction*
+
+Neaterm is a terminal management plugin based on tiling window managers for Neovim that provides a convenient
+way to create, manage, and interact with multiple terminal instances within
+your Neovim environment.
+
+==============================================================================
+2. Installation                                         *neaterm-installation*
+
+You can install Neaterm using your preferred plugin manager. For example,
+using vim-plug:
+>
+    Plug 'Dan7h3x/neaterm'
+<
+After installation, add the following to your init.lua:
+>
+    local Neaterm = require('neaterm')
+    local neaterm = Neaterm.new()
+    neaterm:setup()
+<
+==============================================================================
+3. Usage                                                       *neaterm-usage*
+
+Neaterm allows you to create different types of terminals:
+    - Vertical split
+    - Horizontal split
+    - Floating window
+    - Full-screen
+
+You can toggle terminals, switch between them, and move/resize floating
+terminals using keymaps or commands.
+
+==============================================================================
+4. Commands                                                 *neaterm-commands*
+
+:NeatermVertical     Create a new vertical split terminal
+:NeatermHorizontal   Create a new horizontal split terminal
+:NeatermFloat        Create a new floating terminal
+:NeatermFull         Create a new full-screen terminal
+:NeatermToggle       Toggle the visibility of the current terminal
+:NeatermNext         Switch to the next terminal
+:NeatermPrev         Switch to the previous terminal
+
+==============================================================================
+5. Keymaps                                                   *neaterm-keymaps*
+
+Default keymaps:
+    <A-t>           Toggle terminal
+    <C-\>           New vertical split terminal
+    <C-|>           New horizontal split terminal
+    <C-A-t>         New floating terminal
+    <C-d>           Close current terminal
+    <C-PageDown>    Switch to next terminal
+    <C-PageUp>      Switch to previous terminal
+
+Floating terminal movement:
+    <C-A-Up>         Move up
+    <C-A-Down>         Move down
+    <C-A-Left>         Move left
+    <C-A-Right>         Move right
+
+Floating terminal resizing:
+    <C-Up>         Resize up (decrease height)
+    <C-Down>         Resize down (increase height)
+    <C-Left>         Resize left (decrease width)
+    <C-Right>         Resize right (increase width)
+
+==============================================================================
+6. Configuration                                       *neaterm-configuration*
+
+You can customize Neaterm by passing options to the setup function:
+>
+    local neaterm = Neaterm.new({
+      shell = vim.o.shell,
+      float_width = 0.8,
+      float_height = 0.3,
+      move_amount = 3,
+      resize_amount = 2,
+      keymaps = {
+        -- Customize keymaps here
+      },
+    })
+    neaterm:setup()
+<
+Available options:
+    - shell: The shell to use for terminals (default: vim.o.shell)
+    - float_width: Width of floating terminal as a fraction of screen width
+    - float_height: Height of floating terminal as a fraction of screen height
+    - move_amount: Number of cells to move floating terminal
+    - resize_amount: Number of cells to resize floating terminal
+    - keymaps: Table of custom keymaps (see |neaterm-keymaps| for defaults)
+
+==============================================================================
+vim:ft=help:et:ts=4:sw=4:sts=4:norl:
