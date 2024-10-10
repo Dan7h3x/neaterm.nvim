@@ -8,10 +8,11 @@ Neaterm.__index = Neaterm
 -- Default configuration options
 local default_opts = {
   shell = vim.o.shell,
-  float_width = 0.8,
+  float_width = 0.5,
   float_height = 0.3,
   move_amount = 3,   -- Default amount to move floating terminal
   resize_amount = 2, -- Default amount to resize floating terminal
+  border = 'rounded',
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
@@ -65,7 +66,7 @@ function Neaterm:create_terminal(opts)
       row = row,
       col = col,
       style = 'minimal',
-      border = 'single'
+      border = self.opts.border
     })
   elseif opts.type == 'full' then
     -- Create a full-screen terminal
@@ -162,7 +163,7 @@ function Neaterm:show_terminal(buf)
           row = vim.o.lines - math.floor(vim.o.lines * self.opts.float_height) - 2,
           col = math.floor(vim.o.columns * (1 - self.opts.float_width) / 2),
           style = 'minimal',
-          border = 'single'
+          border = self.opts.border
         })
       else
         vim.cmd(terminal.type == 'vertical' and 'vsplit' or 'split')
@@ -404,7 +405,7 @@ function Neaterm:create_bar()
     row = row,
     col = col,
     style = 'minimal',
-    border = 'single'
+    border = self.opts.border
   })
 
   api.nvim_win_set_option(self.bar_win, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')

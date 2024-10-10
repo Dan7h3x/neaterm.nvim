@@ -1,13 +1,14 @@
 # neaterm.nvim
 
-A little (smart maybe) Terminal for neovim.
+A little (smart maybe) terminal plugin for neovim.
+
+`neaterm` makes a tiling window manager inside neovim, see `demo`.
 
 ## Demo
+
 ![neaterm](https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828)
 
-
 ## Installation
-
 
 ```lua
 {
@@ -21,9 +22,10 @@ A little (smart maybe) Terminal for neovim.
         float_height = 0.3,
         move_amount = 3,   -- Default amount to move floating terminal
         resize_amount = 2, -- Default amount to resize floating terminal
+        border = 'rounded',
         keymaps = {
           toggle = '<A-t>',
-          new_vertical = '<C-\>',
+          new_vertical = '<C-\\>',
           new_horizontal = '<C-.>',
           new_float = '<C-A-t>',
           close = '<C-d>',
@@ -43,3 +45,7 @@ A little (smart maybe) Terminal for neovim.
     end,
   }
 ```
+
+## Contributing
+
+I don't how, if you can help me and this plugin please contact me in `Telegram` : `@Dan7h3x` or mail me `mahdi.jalili.barbin@gmail.com`.:)
