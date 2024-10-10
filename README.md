@@ -2,9 +2,12 @@
 
 A little (smart maybe) Terminal for neovim.
 
+## Demo
+![neaterm](https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828)
+
+
 ## Installation
 
-````lua
 
 ```lua
 {
@@ -39,4 +42,4 @@ A little (smart maybe) Terminal for neovim.
       term:setup()
     end,
   }
-````
+```
