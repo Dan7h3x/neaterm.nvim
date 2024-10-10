@@ -19,11 +19,11 @@ local default_opts = {
   },
 }
 
-function Neaterm.new(user_opts)
+function Neaterm.new(opts)
   local self = setmetatable({}, Neaterm)
   self.terminals = {}
   self.current_terminal = nil
-  self.opts = vim.tbl_deep_extend("force", default_opts, user_opts or {})
+  self.opts = vim.tbl_deep_extend("force", default_opts, opts or {})
   return self
 end
 
