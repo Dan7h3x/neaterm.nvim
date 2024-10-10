@@ -23,5 +23,6 @@ return {
         prev = '<C-PageUp>',
       },
     }
+  }
 }
 ```
