@@ -92,4 +92,27 @@ function M.setup_highlights(opts)
   api.nvim_set_hl(0, 'NeatermBorder', { link = opts.highlights.border, default = true })
 end
 
+
+-- Add a function to set terminal colors based on the current colorscheme
+function M.set_terminal_colors(buf)
+  local colors = {
+    fg = vim.fn.synIDattr(vim.fn.hlID("Normal"), "fg#"),
+    bg = vim.fn.synIDattr(vim.fn.hlID("Normal"), "bg#"),
+  }
+  
+  api.nvim_buf_set_option(buf, "termguicolors", true)
+  vim.fn.setbufvar(buf, "&termguicolors", true)
+  vim.fn.setbufvar(buf, "&t_Co", "256")
+  vim.fn.setbufvar(buf, "&t_AB", "\\e[48;5;%dm")
+  vim.fn.setbufvar(buf, "&t_AF", "\\e[38;5;%dm")
+  
+  local escape = string.char(27)
+  local csi = escape .. "["
+  vim.fn.setbufvar(buf, "&t_8f", csi .. "38;2;%lu;%lu;%lum")
+  vim.fn.setbufvar(buf, "&t_8b", csi .. "48;2;%lu;%lu;%lum")
+  
+  api.nvim_buf_set_option(buf, "winhighlight", "Normal:Normal")
+  api.nvim_command(string.format("highlight! TermNormal guifg=%s guibg=%s", colors.fg, colors.bg))
+end
+
 return M

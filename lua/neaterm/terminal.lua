@@ -1,7 +1,7 @@
 local api = vim.api
 local fn = vim.fn
-local utils = require('dev.neaterm.utils')
-local ui = require('dev.neaterm.ui')
+local utils = require('neaterm.utils')
+local ui = require('neaterm.ui')
 
 local Neaterm = {}
 Neaterm.__index = Neaterm
@@ -16,7 +16,11 @@ end
 
 function Neaterm:create_terminal(opts)
   opts = opts or {}
-  local buf = api.nvim_create_buf(false, true)
+  local buf, err = pcall(api.nvim_create_buf, false, true)
+  if not buf then
+    print("Error creating buffer: " .. tostring(err))
+    return
+  end
   api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
   api.nvim_set_option_value('bufhidden', 'hide', { buf = buf })
 
@@ -40,6 +44,7 @@ function Neaterm:create_terminal(opts)
   self:setup_terminal_settings(win, buf)
 
   vim.cmd('startinsert')
+  ui.set_terminal_colors(buf)
   ui.update_bar(self)
   return buf
 end
@@ -61,6 +66,16 @@ function Neaterm:setup_terminal_settings(win, buf)
   self:setup_autocommands(buf)
 end
 
+-- Add a method to update terminal colors
+function Neaterm:update_terminal_colors()
+  for buf, terminal in pairs(self.terminals) do
+    if api.nvim_buf_is_valid(buf) then
+      ui.set_terminal_colors(buf)
+    end
+  end
+end
+
+
 function Neaterm:setup_keymaps(buf)
   local opts = { noremap = true, silent = true, buffer = buf }
   vim.keymap.set('t', '<C-\\><C-n>', function() self:toggle_normal_mode() end, opts)
@@ -71,6 +86,7 @@ function Neaterm:setup_keymaps(buf)
     local terminal = self.terminals[buf]
     if terminal and terminal.job_id then
       vim.fn.jobsend(terminal.job_id, "\x0c")
+      vim.cmd('redraw')
     end
   end, opts)
 
@@ -81,6 +97,19 @@ function Neaterm:setup_keymaps(buf)
 
 
 end
+
+-- Add a new method for refreshing the terminal display
+function Neaterm:refresh_terminal()
+  if self.current_terminal then
+    local win = self.terminals[self.current_terminal].window
+    if api.nvim_win_is_valid(win) then
+      api.nvim_win_call(win, function()
+        vim.cmd('redraw!')
+      end)
+    end
+  end
+end
+
 
 function Neaterm:setup_autocommands(buf)
   api.nvim_create_autocmd("TermClose", {
@@ -145,17 +174,16 @@ function Neaterm:show_terminal(buf)
     vim.cmd('startinsert')
   end
 end
-
 function Neaterm:close_terminal(buf)
   buf = buf or self.current_terminal
   if buf then
     local terminal = self.terminals[buf]
     if terminal then
       if api.nvim_win_is_valid(terminal.window) then
-        api.nvim_win_close(terminal.window, true)
+        pcall(api.nvim_win_close, terminal.window, true)
       end
       if api.nvim_buf_is_valid(buf) then
-        api.nvim_buf_delete(buf, { force = true })
+        pcall(api.nvim_buf_delete, buf, { force = true })
       end
       self.terminals[buf] = nil
       if self.current_terminal == buf then
@@ -199,6 +227,16 @@ function Neaterm:create_special_terminal(name)
   end
 end
 
+function Neaterm:update_terminal_colors_autocmd()
+    -- Create an autocmd to update terminal colors when the colorscheme changes
+    vim.api.nvim_create_autocmd("ColorScheme", {
+      group = vim.api.nvim_create_augroup("NeatermColorUpdate", { clear = true }),
+      callback = function()
+        self:update_terminal_colors()
+      end,
+    })
+end
+
 function Neaterm:setup()
   utils.create_user_commands(self)
   utils.setup_global_keymaps(self.opts)
@@ -207,6 +245,9 @@ function Neaterm:setup()
   utils.setup_vimleave_autocmd(self)
   self:setup_move_resize_keymaps()
   self:setup_special_terminals()
+  if self.opts.auto_update_colors then
+    self:update_terminal_colors_autocmd()
+  end
   ui.create_bar(self)
 end
 
@@ -217,6 +258,7 @@ function Neaterm:toggle_terminal()
       self:hide_terminal()
     else
       self:show_terminal(self.current_terminal)
+      self:refresh_terminal()
     end
   else
     local last_terminal = next(self.terminals)

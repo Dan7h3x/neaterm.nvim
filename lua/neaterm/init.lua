@@ -1,5 +1,5 @@
-local Neaterm = require('dev.neaterm.terminal')
-local config = require('dev.neaterm.config')
+local Neaterm = require('neaterm.terminal')
+local config = require('neaterm.config')
 
 local M = {}
 
@@ -9,5 +9,8 @@ function M.setup(user_opts)
   neaterm:setup()
   return neaterm
 end
+
+
+M.version = '0.0.1'
 
 return M

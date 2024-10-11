@@ -1,6 +1,6 @@
 local M = {}
 local api = vim.api
-local ui = require("dev.neaterm.ui")
+local ui = require("neaterm.ui")
 function M.create_window(opts, term_opts, buf)
   local win_opts = {
     style = 'minimal',
@@ -25,6 +25,7 @@ function M.create_window(opts, term_opts, buf)
     api.nvim_win_set_buf(win, buf)
     return win
   end
+
 end
 
 function M.create_user_commands(neaterm)
@@ -96,4 +97,11 @@ function M.tbl_index(tbl, value)
   return nil
 end
 
+
+function utils.safe_command(cmd)
+  local ok, result = pcall(vim.cmd, cmd)
+  if not ok then
+    vim.notify("Failed to execute command: " .. tostring(result), vim.log.levels.ERROR)
+  end
+end
 return M
