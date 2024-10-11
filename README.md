@@ -13,7 +13,8 @@ A little (smart maybe) terminal plugin for neovim.
 
 ## Installation
 
-Using `lazy.nvim` you can install the `neaterm` as:
+Using `lazy.nvim` you can install the `neaterm`, create a `neaterm.lua` file and
+put following in it:
 
 ```lua
 return {
@@ -23,12 +24,16 @@ return {
       config = function()
         local Neaterm = require('neaterm')
         local term = Neaterm.new({
-          shell = vim.o.shell,
+          shell = vim.o.shell or "bash",
           float_width = 0.5,
-          float_height = 0.3,
+          float_height = 0.4,
           move_amount = 3,
           resize_amount = 2,
           border = 'rounded',
+          highlights = {
+            normal = 'Normal',
+            border = 'FloatBorder',
+          },
           keymaps = {
             toggle = '<A-t>',
             new_vertical = '<C-\\>',
@@ -45,6 +50,7 @@ return {
             resize_down = '<C-S-Down>',
             resize_left = '<C-S-Left>',
             resize_right = '<C-S-Right>',
+            focus_bar = '<C-A-b>',
           },
         })
         term:setup()

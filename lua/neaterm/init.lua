@@ -17,6 +17,13 @@ local default_opts = {
     normal = 'Normal',
     border = 'FloatBorder',
   },
+  special_terminals = {
+    ranger = {
+      cmd = 'ranger',
+      type = 'float',
+      keymap = '<C-A-r>',
+    }
+  },
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
@@ -45,6 +52,14 @@ function Neaterm.new(user_opts)
   -- Merge user options with default options
   self.opts = vim.tbl_deep_extend("force", default_opts, user_opts or {})
   return self
+end
+
+function Neaterm:create_terminal_with_cmd(opts, args)
+  opts = opts or {}
+  if args and #args > 0 then
+    opts.cmd = table.concat(args, ' ')
+  end
+  self:create_terminal(opts)
 end
 
 -- Create a new terminal
@@ -86,12 +101,14 @@ function Neaterm:create_terminal(opts)
   end
 
   -- Open the terminal in the buffer
-  local term_id = fn.termopen(self.opts.shell, {
+  local cmd = opts.cmd or self.opts.shell
+  local term_id = fn.termopen(cmd, {
     on_exit = function() self:cleanup_terminal(buf) end
   })
+  
 
   -- Store terminal information
-  self.terminals[buf] = { window = win, job_id = term_id, type = opts.type }
+  self.terminals[buf] = { window = win, job_id = term_id, type = opts.type,cmd = cmd }
   self.current_terminal = buf
 
   self:setup_terminal_settings(win, buf)
@@ -209,19 +226,49 @@ function Neaterm:cleanup_terminal(buf)
   self:close_terminal(buf)
 end
 
+function Neaterm:setup_special_terminals()
+  for name, config in pairs(self.opts.special_terminals) do
+    local opts = { noremap = true, silent = true }
+    vim.keymap.set('n', config.keymap, function()
+      self:create_special_terminal(name)
+    end, opts)
+  end
+end
+
+
+function Neaterm:create_special_terminal(name)
+  local config = self.opts.special_terminals[name]
+  if not config then
+    print("Special terminal '" .. name .. "' not found in configuration.")
+    return
+  end
+
+  local terminal_opts = {
+    type = config.type or 'float',
+    cmd = config.cmd,
+    float_width = config.float_width or self.opts.float_width,
+    float_height = config.float_height or self.opts.float_height,
+  }
+
+  local buf = self:create_terminal(terminal_opts)
+  if buf then
+    -- You can add any special setup for this terminal here
+    print("Special terminal '" .. name .. "' created.")
+  end
+end
 -- Set up the plugin
 function Neaterm:setup()
   -- Create user commands
   local function create_command(name, callback)
     api.nvim_create_user_command(name, function(opts)
       callback(opts.args)
-    end, { nargs = '?' })
+    end, { nargs = '*' })
   end
 
-  create_command('NeatermVertical', function() self:create_terminal({ type = 'vertical' }) end)
-  create_command('NeatermHorizontal', function() self:create_terminal({ type = 'horizontal' }) end)
-  create_command('NeatermFloat', function() self:create_terminal({ type = 'float' }) end)
-  create_command('NeatermFull', function() self:create_terminal({ type = 'full' }) end)
+  create_command('NeatermVertical', function(args) self:create_terminal({ type = 'vertical' }, args) end)
+  create_command('NeatermHorizontal', function(args) self:create_terminal({ type = 'horizontal' }, args) end)
+  create_command('NeatermFloat', function(args) self:create_terminal({ type = 'float' }, args) end)
+  create_command('NeatermFull', function(args) self:create_terminal({ type = 'full' }, args) end)
   create_command('NeatermToggle', function() self:toggle_terminal() end)
   create_command('NeatermNext', function() self:next_terminal() end)
   create_command('NeatermPrev', function() self:prev_terminal() end)
@@ -396,6 +443,7 @@ end
 function Neaterm:create_bar()
   self.bar_buf = api.nvim_create_buf(false, true)
   api.nvim_set_option_value('buftype', 'nofile', { buf = self.bar_buf })
+  api.nvim_set_option_value('filetype', 'neaterm', { buf = self.bar_buf })
   api.nvim_set_option_value('bufhidden', 'hide', { buf = self.bar_buf })
   api.nvim_set_option_value('swapfile', false, { buf = self.bar_buf })
 
