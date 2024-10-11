@@ -9,10 +9,14 @@ Neaterm.__index = Neaterm
 local default_opts = {
   shell = vim.o.shell,
   float_width = 0.5,
-  float_height = 0.3,
+  float_height = 0.4,
   move_amount = 3,   -- Default amount to move floating terminal
   resize_amount = 2, -- Default amount to resize floating terminal
   border = 'rounded',
+  highlights = {
+    normal = 'Normal',
+    border = 'FloatBorder',
+  },
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
@@ -29,6 +33,7 @@ local default_opts = {
     resize_down = '<C-S-Down>',
     resize_left = '<C-S-Left>',
     resize_right = '<C-S-Right>',
+    focus_bar = '<C-A-b>',
   },
 }
 
@@ -48,8 +53,8 @@ function Neaterm:create_terminal(opts)
 
   -- Create a new buffer for the terminal
   local buf = api.nvim_create_buf(false, true)
-  api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
-  api.nvim_buf_set_option(buf, 'bufhidden', 'hide')
+  api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
+  api.nvim_set_option_value('bufhidden', 'hide', { buf = buf })
 
   local win
   if opts.type == 'float' then
@@ -229,10 +234,10 @@ function Neaterm:setup()
   vim.keymap.set('n', self.opts.keymaps.new_float, '<CMD>NeatermFloat<CR>', opts)
   vim.keymap.set('n', self.opts.keymaps.next, '<CMD>NeatermNext<CR>', opts)
   vim.keymap.set('n', self.opts.keymaps.prev, '<CMD>NeatermPrev<CR>', opts)
-
+  vim.keymap.set('n', self.opts.keymaps.focus_bar, '<CMD>NeatermFocusBar<CR>', opts)
   -- Set up highlighting
-  api.nvim_set_hl(0, 'NeatermNormal', { link = 'Normal', default = true })
-  api.nvim_set_hl(0, 'NeatermBorder', { link = 'FloatBorder', default = true })
+  api.nvim_set_hl(0, 'NeatermNormal', { link = self.opts.highlights.normal, default = true })
+  api.nvim_set_hl(0, 'NeatermBorder', { link = self.opts.highlights.border, default = true })
 
   -- Set up filetype detection
   api.nvim_create_autocmd("FileType", {
@@ -389,9 +394,9 @@ end
 
 function Neaterm:create_bar()
   self.bar_buf = api.nvim_create_buf(false, true)
-  api.nvim_buf_set_option(self.bar_buf, 'buftype', 'nofile')
-  api.nvim_buf_set_option(self.bar_buf, 'bufhidden', 'hide')
-  api.nvim_buf_set_option(self.bar_buf, 'swapfile', false)
+  api.nvim_set_option_value('buftype', 'nofile', { buf = self.bar_buf })
+  api.nvim_set_option_value('bufhidden', 'hide', { buf = self.bar_buf })
+  api.nvim_set_option_value('swapfile', false, { buf = self.bar_buf })
 
   local width = 20
   local height = 1
@@ -409,21 +414,24 @@ function Neaterm:create_bar()
   })
 
   api.nvim_win_set_option(self.bar_win, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')
-
   self:update_bar()
 
-  -- Set up mouse click handling for the bar
-  vim.keymap.set('n', '<C-LeftMouse>', function()
-    local mouse_pos = vim.fn.getmousepos()
-    if mouse_pos.winid == self.bar_win then
-      local col = mouse_pos.column
-      local term_index = math.floor(col / 2)
-      local terminals = vim.tbl_keys(self.terminals)
-      if term_index > 0 and term_index <= #terminals then
-        self:show_terminal(terminals[term_index])
-      end
+  vim.keymap.set('n', '<CR>', function()
+    local cursor_pos = api.nvim_win_get_cursor(self.bar_win)
+    local col = cursor_pos[2]
+    local term_index = math.floor(col / 2) + 1
+    local terminals = vim.tbl_keys(self.terminals)
+    if term_index > 0 and term_index <= #terminals then
+      self:show_terminal(terminals[term_index])
     end
-  end, { silent = true })
+  end, { buffer = self.bar_buf, silent = true })
+
+end
+
+function Neaterm:focus_bar()
+  if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
+    api.nvim_set_current_win(self.bar_win)
+  end
 end
 
 function Neaterm:update_bar()

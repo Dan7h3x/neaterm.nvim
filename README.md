@@ -8,7 +8,7 @@ A little (smart maybe) terminal plugin for neovim.
 
 <div class="plugin-media"> 
     <h3>Demo Video</h3>
-    <img width="720" height="615" src="https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828"></img>
+    <img width="720" height="480" src="https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828"></img>
 </div>
 
 ## Installation
@@ -55,4 +55,4 @@ return {
 
 ## Contributing
 
-I don't how, if you can help me and this plugin please contact me in `Telegram` : `@Dan7h3x` or mail me `mahdi.jalili.barbin@gmail.com`.:)
+I don't how, if you can help me and this plugin please contact me in `Telegram` : `@Dan7h3x` or mail me `m.jalili.barbin@gmail.com`.:)
