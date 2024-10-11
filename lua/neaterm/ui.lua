@@ -49,14 +49,12 @@ function M.update_bar(neaterm)
     return
   end
 
-  if #terminals > 1 then
-    if not neaterm.bar_win or not api.nvim_win_is_valid(neaterm.bar_win) then
-      M.create_bar(neaterm)
-      return
-    end
+  if not neaterm.bar_win or not api.nvim_win_is_valid(neaterm.bar_win) then
+    M.create_bar(neaterm)
+    return
   end
   if not neaterm.bar_buf or not api.nvim_buf_is_valid(neaterm.bar_buf) then
-    return
+    return nil
   end
 
   local bar_content = {}
