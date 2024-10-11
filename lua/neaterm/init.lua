@@ -22,7 +22,7 @@ local default_opts = {
       cmd = 'ranger',
       type = 'float',
       keymap = '<C-A-r>',
-    }
+    },
   },
   keymaps = {
     toggle = '<A-t>',
@@ -105,10 +105,10 @@ function Neaterm:create_terminal(opts)
   local term_id = fn.termopen(cmd, {
     on_exit = function() self:cleanup_terminal(buf) end
   })
-  
+
 
   -- Store terminal information
-  self.terminals[buf] = { window = win, job_id = term_id, type = opts.type,cmd = cmd }
+  self.terminals[buf] = { window = win, job_id = term_id, type = opts.type, cmd = cmd }
   self.current_terminal = buf
 
   self:setup_terminal_settings(win, buf)
@@ -235,7 +235,6 @@ function Neaterm:setup_special_terminals()
   end
 end
 
-
 function Neaterm:create_special_terminal(name)
   local config = self.opts.special_terminals[name]
   if not config then
@@ -256,6 +255,7 @@ function Neaterm:create_special_terminal(name)
     print("Special terminal '" .. name .. "' created.")
   end
 end
+
 -- Set up the plugin
 function Neaterm:setup()
   -- Create user commands
@@ -265,10 +265,10 @@ function Neaterm:setup()
     end, { nargs = '*' })
   end
 
-  create_command('NeatermVertical', function(args) self:create_terminal({ type = 'vertical' }, args) end)
-  create_command('NeatermHorizontal', function(args) self:create_terminal({ type = 'horizontal' }, args) end)
-  create_command('NeatermFloat', function(args) self:create_terminal({ type = 'float' }, args) end)
-  create_command('NeatermFull', function(args) self:create_terminal({ type = 'full' }, args) end)
+  create_command('NeatermVertical', function(args) self:create_terminal_with_cmd({ type = 'vertical' }, args) end)
+  create_command('NeatermHorizontal', function(args) self:create_terminal_with_cmd({ type = 'horizontal' }, args) end)
+  create_command('NeatermFloat', function(args) self:create_terminal_with_cmd({ type = 'float' }, args) end)
+  create_command('NeatermFull', function(args) self:create_terminal_with_cmd({ type = 'full' }, args) end)
   create_command('NeatermToggle', function() self:toggle_terminal() end)
   create_command('NeatermNext', function() self:next_terminal() end)
   create_command('NeatermPrev', function() self:prev_terminal() end)
