@@ -26,6 +26,7 @@ return {
   {
     "Dan7h3x/neaterm.nvim",
     event = "VeryLazy",
+    branch = "stable",
     config = function()
         require("neaterm").setup({
             shell = vim.o.shell,
