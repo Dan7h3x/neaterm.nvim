@@ -4,8 +4,8 @@ A little (smart maybe) terminal plugin for neovim.
 
 `neaterm` makes a tiling window manager inside neovim, see `demo`.
 
-<a href="https://dotfyle.com/plugins/{Dan7h3x}/{neaterm.nvim}">
-  <img src="https://dotfyle.com/plugins/{Dan7h3x}/{neaterm.nvim}/shield" />
+<a href="https://dotfyle.com/plugins/Dan7h3x/neaterm.nvim">
+  <img src="https://dotfyle.com/plugins/Dan7h3x/neaterm.nvim/shield" />
 </a>
 
 ## Demo
