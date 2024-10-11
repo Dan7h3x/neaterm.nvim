@@ -248,6 +248,7 @@ function Neaterm:next_terminal()
     local next_index = (current_index % #terminals) + 1
     self:show_terminal(terminals[next_index])
   end
+  ui.update_bar(self)
 end
 
 function Neaterm:prev_terminal()
@@ -258,6 +259,7 @@ function Neaterm:prev_terminal()
     local prev_index = ((current_index - 2 + #terminals) % #terminals) + 1
     self:show_terminal(terminals[prev_index])
   end
+  ui.update_bar(self)
 end
 
 function Neaterm:resize_float(direction)

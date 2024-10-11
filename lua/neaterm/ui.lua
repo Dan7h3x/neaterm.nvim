@@ -25,7 +25,6 @@ function M.create_bar(neaterm)
   })
 
   api.nvim_win_set_option(neaterm.bar_win, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')
-  M.update_bar(neaterm)
 
   vim.keymap.set('n', '<CR>', function()
     local cursor_pos = api.nvim_win_get_cursor(neaterm.bar_win)
@@ -36,6 +35,7 @@ function M.create_bar(neaterm)
       neaterm:show_terminal(terminals[term_index])
     end
   end, { buffer = neaterm.bar_buf, silent = true })
+  M.update_bar(neaterm)
 end
 
 function M.update_bar(neaterm)
