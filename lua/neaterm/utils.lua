@@ -1,6 +1,7 @@
 local M = {}
 local api = vim.api
 local ui = require("neaterm.ui")
+
 function M.create_window(opts, term_opts, buf)
   local win_opts = {
     style = 'minimal',
