@@ -56,8 +56,8 @@ end
 
 function Neaterm:create_terminal_with_cmd(opts, args)
   opts = opts or {}
-  if args and #args > 0 then
-    opts.cmd = table.concat(args, ' ')
+  if args and args ~= "" then
+    opts.cmd = args
   end
   self:create_terminal(opts)
 end
@@ -102,10 +102,15 @@ function Neaterm:create_terminal(opts)
 
   -- Open the terminal in the buffer
   local cmd = opts.cmd or self.opts.shell
-  local term_id = fn.termopen(cmd, {
-    on_exit = function() self:cleanup_terminal(buf) end
-  })
-
+  local term_id
+  if type(cmd) == "string" then
+    term_id = fn.termopen(cmd, {
+      on_exit = function() self:cleanup_terminal(buf) end
+    })
+  else
+    print("Invalid command type: Expected string, got " .. type(cmd) .. ".")
+    return
+  end
 
   -- Store terminal information
   self.terminals[buf] = { window = win, job_id = term_id, type = opts.type, cmd = cmd }
