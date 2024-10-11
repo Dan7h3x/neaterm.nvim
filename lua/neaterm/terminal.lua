@@ -16,11 +16,7 @@ end
 
 function Neaterm:create_terminal(opts)
   opts = opts or {}
-  local buf, err = pcall(api.nvim_create_buf, false, true)
-  if not buf then
-    print("Error creating buffer: " .. tostring(err))
-    return
-  end
+  local buf = api.nvim_create_buf(false, true)
   api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
   api.nvim_set_option_value('bufhidden', 'hide', { buf = buf })
 
@@ -75,7 +71,6 @@ function Neaterm:update_terminal_colors()
   end
 end
 
-
 function Neaterm:setup_keymaps(buf)
   local opts = { noremap = true, silent = true, buffer = buf }
   vim.keymap.set('t', '<C-\\><C-n>', function() self:toggle_normal_mode() end, opts)
@@ -94,8 +89,6 @@ function Neaterm:setup_keymaps(buf)
   vim.keymap.set('t', '<C-S-Down>', function() self:scroll_terminal("down", 5) end, opts)
   vim.keymap.set('t', '<C-C>', function() self:copy_terminal_content() end, opts)
   vim.keymap.set('n', self.opts.keymaps.copy_content, function() self:copy_terminal_content() end, opts)
-
-
 end
 
 -- Add a new method for refreshing the terminal display
@@ -109,7 +102,6 @@ function Neaterm:refresh_terminal()
     end
   end
 end
-
 
 function Neaterm:setup_autocommands(buf)
   api.nvim_create_autocmd("TermClose", {
@@ -139,10 +131,10 @@ function Neaterm:scroll_terminal(direction, lines)
 
   local current_line = api.nvim_win_get_cursor(win)[1]
   local new_line = direction == "up"
-    and math.max(1, current_line - lines)
-    or math.min(api.nvim_buf_line_count(self.current_terminal), current_line + lines)
+      and math.max(1, current_line - lines)
+      or math.min(api.nvim_buf_line_count(self.current_terminal), current_line + lines)
 
-  api.nvim_win_set_cursor(win, {new_line, 0})
+  api.nvim_win_set_cursor(win, { new_line, 0 })
 end
 
 function Neaterm:toggle_normal_mode()
@@ -174,6 +166,7 @@ function Neaterm:show_terminal(buf)
     vim.cmd('startinsert')
   end
 end
+
 function Neaterm:close_terminal(buf)
   buf = buf or self.current_terminal
   if buf then
@@ -228,13 +221,13 @@ function Neaterm:create_special_terminal(name)
 end
 
 function Neaterm:update_terminal_colors_autocmd()
-    -- Create an autocmd to update terminal colors when the colorscheme changes
-    vim.api.nvim_create_autocmd("ColorScheme", {
-      group = vim.api.nvim_create_augroup("NeatermColorUpdate", { clear = true }),
-      callback = function()
-        self:update_terminal_colors()
-      end,
-    })
+  -- Create an autocmd to update terminal colors when the colorscheme changes
+  vim.api.nvim_create_autocmd("ColorScheme", {
+    group = vim.api.nvim_create_augroup("NeatermColorUpdate", { clear = true }),
+    callback = function()
+      self:update_terminal_colors()
+    end,
+  })
 end
 
 function Neaterm:setup()
