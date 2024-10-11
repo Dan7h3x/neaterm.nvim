@@ -35,6 +35,7 @@ local default_opts = {
     resize_left = '<C-S-Left>',
     resize_right = '<C-S-Right>',
     focus_bar = '<C-A-b>',
+    copy_content = '<C-A-c>',
   },
 }
 

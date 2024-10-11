@@ -1,5 +1,5 @@
-local Neaterm = require('neaterm.terminal')
-local config = require('neaterm.config')
+local Neaterm = require('dev.neaterm.terminal')
+local config = require('dev.neaterm.config')
 
 local M = {}
 

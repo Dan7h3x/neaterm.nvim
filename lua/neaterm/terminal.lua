@@ -1,7 +1,7 @@
 local api = vim.api
 local fn = vim.fn
-local utils = require('neaterm.utils')
-local ui = require('neaterm.ui')
+local utils = require('dev.neaterm.utils')
+local ui = require('dev.neaterm.ui')
 
 local Neaterm = {}
 Neaterm.__index = Neaterm
@@ -67,6 +67,19 @@ function Neaterm:setup_keymaps(buf)
   vim.keymap.set('t', '<C-w>', '<C-\\><C-n><C-w>', opts)
   vim.keymap.set('n', '<Esc><Esc>', function() self:toggle_normal_mode() end, opts)
   vim.keymap.set('n', self.opts.keymaps.close, function() self:close_terminal() end, opts)
+  vim.keymap.set('t', '<C-l>', function()
+    local terminal = self.terminals[buf]
+    if terminal and terminal.job_id then
+      vim.fn.jobsend(terminal.job_id, "\x0c")
+    end
+  end, opts)
+
+  vim.keymap.set('t', '<C-S-Up>', function() self:scroll_terminal("up", 5) end, opts)
+  vim.keymap.set('t', '<C-S-Down>', function() self:scroll_terminal("down", 5) end, opts)
+  vim.keymap.set('t', '<C-C>', function() self:copy_terminal_content() end, opts)
+  vim.keymap.set('n', self.opts.keymaps.copy_content, function() self:copy_terminal_content() end, opts)
+
+
 end
 
 function Neaterm:setup_autocommands(buf)
@@ -80,6 +93,27 @@ function Neaterm:setup_autocommands(buf)
       end)
     end
   })
+end
+
+function Neaterm:copy_terminal_content()
+  if not self.current_terminal then return end
+  local buf = self.current_terminal
+  local content = api.nvim_buf_get_lines(buf, 0, -1, false)
+  vim.fn.setreg('+', table.concat(content, '\n'))
+  print("Terminal content copied to clipboard")
+end
+
+function Neaterm:scroll_terminal(direction, lines)
+  if not self.current_terminal then return end
+  local win = self.terminals[self.current_terminal].window
+  if not api.nvim_win_is_valid(win) then return end
+
+  local current_line = api.nvim_win_get_cursor(win)[1]
+  local new_line = direction == "up"
+    and math.max(1, current_line - lines)
+    or math.min(api.nvim_buf_line_count(self.current_terminal), current_line + lines)
+
+  api.nvim_win_set_cursor(win, {new_line, 0})
 end
 
 function Neaterm:toggle_normal_mode()
