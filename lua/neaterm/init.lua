@@ -225,6 +225,7 @@ function Neaterm:setup()
   create_command('NeatermToggle', function() self:toggle_terminal() end)
   create_command('NeatermNext', function() self:next_terminal() end)
   create_command('NeatermPrev', function() self:prev_terminal() end)
+  create_command('NeatermFocusBar', function() self:focus_bar() end)
 
   -- Set up global keymaps
   local opts = { noremap = true, silent = true }
@@ -425,7 +426,6 @@ function Neaterm:create_bar()
       self:show_terminal(terminals[term_index])
     end
   end, { buffer = self.bar_buf, silent = true })
-
 end
 
 function Neaterm:focus_bar()
