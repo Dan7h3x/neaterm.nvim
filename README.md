@@ -6,7 +6,10 @@ A little (smart maybe) terminal plugin for neovim.
 
 ## Demo
 
-![neaterm](https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828)
+<div class="plugin-media"> 
+    <h3>Demo Video</h3>
+    <iframe width="720" height="615" src="https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828" frameborder="0" allowfullscreen></iframe>
+</div>
 
 ## Installation
 
