@@ -40,7 +40,6 @@ function Neaterm:create_terminal(opts)
   self:setup_terminal_settings(win, buf)
 
   vim.cmd('startinsert')
-  ui.set_terminal_colors(buf)
   ui.update_bar(self)
   return buf
 end
@@ -60,15 +59,6 @@ function Neaterm:setup_terminal_settings(win, buf)
 
   self:setup_keymaps(buf)
   self:setup_autocommands(buf)
-end
-
--- Add a method to update terminal colors
-function Neaterm:update_terminal_colors()
-  for buf, terminal in pairs(self.terminals) do
-    if api.nvim_buf_is_valid(buf) then
-      ui.set_terminal_colors(buf)
-    end
-  end
 end
 
 function Neaterm:setup_keymaps(buf)
@@ -220,16 +210,6 @@ function Neaterm:create_special_terminal(name)
   end
 end
 
-function Neaterm:update_terminal_colors_autocmd()
-  -- Create an autocmd to update terminal colors when the colorscheme changes
-  vim.api.nvim_create_autocmd("ColorScheme", {
-    group = vim.api.nvim_create_augroup("NeatermColorUpdate", { clear = true }),
-    callback = function()
-      self:update_terminal_colors()
-    end,
-  })
-end
-
 function Neaterm:setup()
   utils.create_user_commands(self)
   utils.setup_global_keymaps(self.opts)
@@ -238,9 +218,6 @@ function Neaterm:setup()
   utils.setup_vimleave_autocmd(self)
   self:setup_move_resize_keymaps()
   self:setup_special_terminals()
-  if self.opts.auto_update_colors then
-    self:update_terminal_colors_autocmd()
-  end
   ui.create_bar(self)
 end
 

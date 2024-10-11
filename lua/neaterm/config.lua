@@ -7,7 +7,6 @@ local default_opts = {
   move_amount = 3,
   resize_amount = 2,
   border = 'rounded',
-  auto_update_colors = true,
   highlights = {
     normal = 'Normal',
     border = 'FloatBorder',
