@@ -1,5 +1,6 @@
 local api = vim.api
 local fn = vim.fn
+local uv = vim.loop
 local utils = require('neaterm.utils')
 local ui = require('neaterm.ui')
 
@@ -38,11 +39,14 @@ function Neaterm:create_terminal(opts)
 
   self.terminals[buf] = { window = win, job_id = term_id, type = opts.type, cmd = cmd }
   self.current_terminal = buf
-
-  self:setup_terminal_settings(win, buf)
-
-  vim.cmd('startinsert')
-  ui.update_bar(self)
+  uv.new_async(function()
+    self:setup_terminal_settings(win, buf)
+    if opts.use_ueberzugpp then
+      setup_ueberzugpp(buf, term_id)
+    end
+    vim.cmd('startinsert')
+    ui.update_bar(self)
+  end)
   return buf
 end
 
@@ -77,9 +81,9 @@ function Neaterm:setup_keymaps(buf)
     end
   end, opts)
 
-  vim.keymap.set('t', '<C-S-Up>', function() self:scroll_terminal("up", 5) end, opts)
-  vim.keymap.set('t', '<C-S-Down>', function() self:scroll_terminal("down", 5) end, opts)
-  vim.keymap.set('t', '<C-C>', function() self:copy_terminal_content() end, opts)
+  vim.keymap.set('t', '<C-Up>', function() self:scroll_terminal("up", 5) end, opts)
+  vim.keymap.set('t', '<C-Down>', function() self:scroll_terminal("down", 5) end, opts)
+  vim.keymap.set('t', '<C-c>', function() self:copy_terminal_content() end, opts)
   vim.keymap.set('n', self.opts.keymaps.copy_content, function() self:copy_terminal_content() end, opts)
 end
 
@@ -88,8 +92,10 @@ function Neaterm:refresh_terminal()
   if self.current_terminal then
     local win = self.terminals[self.current_terminal].window
     if api.nvim_win_is_valid(win) then
-      api.nvim_win_call(win, function()
-        vim.cmd('redraw!')
+      vim.schedule(function()
+        api.nvim_win_call(win, function()
+          vim.cmd('redraw!')
+        end)
       end)
     end
   end
@@ -264,7 +270,7 @@ function Neaterm:prev_terminal()
   ui.update_bar(self)
 end
 
-function Neaterm:resize_float(direction)
+Neaterm.resize_float = utils.debounce(function(self,direction)
   if not self.current_terminal or self.terminals[self.current_terminal].type ~= 'float' then
     return
   end
@@ -288,7 +294,8 @@ function Neaterm:resize_float(direction)
   end
 
   api.nvim_win_set_config(win, config)
-end
+  self:refresh_terminal()
+end, 50)
 
 function Neaterm:setup_move_resize_keymaps()
   local opts = { noremap = true, silent = true }
@@ -326,6 +333,28 @@ function Neaterm:move_float(direction)
   end
 
   api.nvim_win_set_config(win, config)
+end
+
+
+
+local function setup_ueberzugpp(buf, job_id)
+  if not M.config.use_ueberzugpp then
+    return
+  end
+
+  local pid = vim.fn.jobpid(job_id)
+  local fifo_path = M.config.ueberzugpp_fifo:gsub("{pid}", pid)
+
+  -- Start ueberzugpp instance
+  vim.fn.jobstart(string.format("ueberzugpp layer --silent --use-escape-codes --pid %d", pid), {
+    detach = true,
+  })
+
+  -- Set environment variables for ranger to use ueberzugpp
+  vim.fn.setbufvar(buf, "term_env", {
+    ["UEBERZUG_FIFO"] = fifo_path,
+    ["UEBERZUG_SCALING"] = "fit_contain",
+  })
 end
 
 return Neaterm

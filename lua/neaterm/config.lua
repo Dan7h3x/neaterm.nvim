@@ -37,6 +37,8 @@ local default_opts = {
     focus_bar = '<C-A-b>',
     copy_content = '<C-A-c>',
   },
+  use_ueberzugpp = false,
+  ueberzugpp_fifo = "/tmp/ueberzugpp-{pid}.socket",
 }
 
 function M.setup(user_opts)

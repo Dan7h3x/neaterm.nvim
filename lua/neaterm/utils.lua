@@ -98,4 +98,23 @@ function M.tbl_index(tbl, value)
   return nil
 end
 
+
+function M.debounce(func, wait)
+  local timer = nil
+  return function(...)
+    local context = self
+    local args = {...}
+    if timer then
+      timer:stop()
+      timer:close()
+    end
+    timer = vim.loop.new_timer()
+    timer:start(wait, 0, vim.schedule_wrap(function()
+      timer:stop()
+      timer:close()
+      func(unpack(args))
+    end))
+  end
+end
+
 return M
