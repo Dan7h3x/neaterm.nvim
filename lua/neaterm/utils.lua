@@ -47,13 +47,13 @@ end
 function M.setup_global_keymaps(opts)
   local keymap_opts = { noremap = true, silent = true }
   local keymaps = {
-    { 'n', opts.keymaps.toggle,         '<CMD>NeatermToggle<CR>' },
-    { 'n', opts.keymaps.new_vertical,   '<CMD>NeatermVertical<CR>' },
-    { 'n', opts.keymaps.new_horizontal, '<CMD>NeatermHorizontal<CR>' },
-    { 'n', opts.keymaps.new_float,      '<CMD>NeatermFloat<CR>' },
-    { 'n', opts.keymaps.next,           '<CMD>NeatermNext<CR>' },
-    { 'n', opts.keymaps.prev,           '<CMD>NeatermPrev<CR>' },
-    { 'n', opts.keymaps.focus_bar,      '<CMD>NeatermFocusBar<CR>' },
+    { { 'n', 't' }, opts.keymaps.toggle,         '<CMD>NeatermToggle<CR>' },
+    { { 'n', 't' }, opts.keymaps.new_vertical,   '<CMD>NeatermVertical<CR>' },
+    { { 'n', 't' }, opts.keymaps.new_horizontal, '<CMD>NeatermHorizontal<CR>' },
+    { { 'n', 't' }, opts.keymaps.new_float,      '<CMD>NeatermFloat<CR>' },
+    { { 'n', 't' }, opts.keymaps.next,           '<CMD>NeatermNext<CR>' },
+    { { 'n', 't' }, opts.keymaps.prev,           '<CMD>NeatermPrev<CR>' },
+    { { 'n', 't' }, opts.keymaps.focus_bar,      '<CMD>NeatermFocusBar<CR>' },
   }
   for _, map in ipairs(keymaps) do
     vim.keymap.set(map[1], map[2], map[3], keymap_opts)
