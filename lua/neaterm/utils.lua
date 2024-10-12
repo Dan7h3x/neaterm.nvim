@@ -13,7 +13,7 @@ function M.create_window(opts, term_opts, buf)
     win_opts.height = math.floor(vim.o.lines * opts.float_height)
     win_opts.row = vim.o.lines - win_opts.height - 4
     win_opts.col = math.floor((vim.o.columns - win_opts.width) / 2)
-    api.nvim_win_set_option(buf, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')
+    win_opts.winhighlight = 'Normal:NeatermNormal,FloatBorder:NeatermBorder'
 
     return api.nvim_open_win(buf, true, win_opts)
   elseif term_opts.type == 'full' then
