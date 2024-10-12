@@ -8,7 +8,7 @@ local default_opts = {
   resize_amount = 2,
   border = 'rounded',
   highlights = {
-    normal = 'Normal',
+    normal = 'NormalFloat',
     border = 'FloatBorder',
   },
   special_terminals = {
