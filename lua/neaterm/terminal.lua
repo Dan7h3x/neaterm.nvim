@@ -21,7 +21,9 @@ function Neaterm:create_terminal(opts)
   api.nvim_set_option_value('bufhidden', 'hide', { buf = buf })
 
   local win = utils.create_window(self.opts, opts, buf)
-
+  if win and opts.type == 'float' then
+    api.nvim_win_set_option(win, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')
+  end
   local cmd = opts.cmd or self.opts.shell
   local term_id
   if type(cmd) == "string" then
