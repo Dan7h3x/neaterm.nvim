@@ -129,7 +129,7 @@ function Neaterm:show_terminal(buf)
     end
     api.nvim_set_current_win(win)
     self.current_terminal = buf
-    vim.cmd('startinsert')
+    vim.cmd('stopinsert')
   end
 end
 
