@@ -375,22 +375,18 @@ function Neaterm:update_variables()
   self:send_text(config.get_variables_cmd)
 end
 
-function Neaterm:show_variables()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
+-- Add this to store variables
+function Neaterm:capture_variables_async()
+  if not self.current_repl then return {} end
+  
   local config = self.repl_configs[self.current_repl.filetype]
-  if not config or not config.get_variables_cmd then
-    vim.notify("Variable inspection not supported for this REPL", vim.log.levels.WARN)
-    return
-  end
+  if not config or not config.get_variables_cmd then return {} end
 
-  -- Create temporary buffer for output
+  -- Create a temporary buffer for capturing output
   local temp_buf = api.nvim_create_buf(false, true)
   local output = ""
-  
+  local capture_complete = false
+
   -- Setup output capture
   api.nvim_buf_attach(temp_buf, false, {
     on_lines = function(_, _, _, first_line, last_line)
@@ -399,50 +395,139 @@ function Neaterm:show_variables()
     end
   })
 
-  -- Send command and wait briefly for output
+  -- Store the original terminal buffer
+  local original_buf = self.current_repl.buf
+  local original_win = api.nvim_get_current_win()
+
+  -- Redirect terminal output to our temporary buffer
+  local redirect_cmd = string.format([[
+    local output = vim.fn.term_getline(%d, 1, '$')
+    vim.api.nvim_buf_set_lines(%d, 0, -1, false, output)
+  ]], original_buf, temp_buf)
+
+  -- Send command silently
   self:send_text(config.get_variables_cmd)
-  
-  vim.defer_fn(function()
-    -- Parse the captured output
+
+  -- Wait for output and process it
+  return vim.defer_fn(function()
     local vars = self:parse_repl_output(output, self.current_repl.filetype)
-    
-    -- Clean up temporary buffer
-    api.nvim_buf_delete(temp_buf, { force = true })
-    
-    -- Show variables in fzf
+    pcall(api.nvim_buf_delete, temp_buf, { force = true })
+    return vars
+  end, 100)
+end
+
+-- Add this for file-based variable storage
+function Neaterm:store_variables()
+  if not self.current_repl then return end
+  
+  local vars_file = string.format(
+    "%s/neaterm_%s_vars.json",
+    vim.fn.stdpath('data'),
+    self.current_repl.filetype
+  )
+  
+  local vars = self:capture_variables_async()
+  if next(vars) then
+    local ok, encoded = pcall(vim.json.encode, vars)
+    if ok then
+      local file = io.open(vars_file, 'w')
+      if file then
+        file:write(encoded)
+        file:close()
+      end
+    end
+  end
+end
+
+-- Update show_variables to use the new methods
+function Neaterm:show_variables()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config then return end
+
+  -- Function to display variables in fzf
+  local function display_vars(vars)
+    if not vars or #vars == 0 then
+      vim.notify("No variables found", vim.log.levels.INFO)
+      return
+    end
+
     require('fzf-lua').fzf_exec(
-      vim.tbl_map(function(var) return var.display end, vars),
+      vim.tbl_map(function(var)
+        -- Format: name | type | size/info
+        return string.format("%-30s │ %-20s │ %s",
+          var.name,
+          var.type or "unknown",
+          var.size or var.info or ""
+        )
+      end, vars),
       {
         prompt = "REPL Variables > ",
         actions = {
           ["default"] = function(selected)
             local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
-            for _, var in ipairs(vars) do
-              if var.name == name then
-                if config.inspect_variable_cmd then
-                  local cmd = config.inspect_variable_cmd
-                  if cmd:sub(-1) ~= ")" then
-                    cmd = cmd .. ")"
-                  end
-                  self:send_text(name .. config.inspect_variable_cmd)
-                end
-                break
-              end
+            if config.inspect_variable_cmd then
+              self:send_text(string.format("%s%s", name, config.inspect_variable_cmd))
             end
           end,
-          ["ctrl-e"] = function(selected)
+          ["ctrl-r"] = function(_)
+            -- Refresh variables
+            self:store_variables()
+            vim.defer_fn(function()
+              self:show_variables()
+            end, 200)
+          end,
+          ["ctrl-x"] = function(selected)
             local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
-            self:edit_variable(name)
+            if config.delete_variable_cmd then
+              self:send_text(string.format(config.delete_variable_cmd, name))
+              self:store_variables()
+            end
           end
         },
         fzf_opts = {
           ["--delimiter"] = "│",
           ["--with-nth"] = "1,2,3",
-          ["--header"] = "Name                 │ Type       │ Size",
+          ["--header"] = "Variable Name                    │ Type                │ Size/Info",
+          ["--header-lines"] = "1",
+          ["--preview"] = string.format(
+            [[echo {} | awk -F'│' '{print $1}' | xargs -I%% echo '%s%%']], 
+            config.inspect_variable_cmd or "type "
+          ),
+          ["--preview-window"] = "right:50%:wrap",
         },
       }
     )
-  end, 100) -- Adjust timeout as needed
+  end
+
+  -- Try to read from file first
+  local vars_file = string.format(
+    "%s/neaterm_%s_vars.json",
+    vim.fn.stdpath('data'),
+    self.current_repl.filetype
+  )
+
+  local file = io.open(vars_file, 'r')
+  if file then
+    local content = file:read("*all")
+    file:close()
+    local ok, vars = pcall(vim.json.decode, content)
+    if ok and next(vars) then
+      display_vars(vars)
+      return
+    end
+  end
+
+  -- If file doesn't exist or is empty, capture variables directly
+  self:capture_variables_async()
+  vim.defer_fn(function()
+    local vars = self:capture_variables_async()
+    display_vars(vars)
+  end, 200)
 end
 
 -- History Management Methods
