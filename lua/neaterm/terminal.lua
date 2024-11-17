@@ -499,6 +499,160 @@ function Neaterm:resize_terminal(direction)
   vim.cmd(cmd[direction])
 end
 
+-- Add these methods to the Neaterm class
 
+-- Send buffer content to REPL
+function Neaterm:send_buffer_to_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+  
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+  
+  if text ~= "" then
+    self:add_to_history(text, self.current_repl.filetype)
+    self:send_text(text)
+  end
+end
+
+-- Send selection to REPL
+function Neaterm:send_selection_to_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+  
+  local text = utils.get_visual_selection()
+  if text ~= "" then
+    self:add_to_history(text, self.current_repl.filetype)
+    self:send_text(text)
+  end
+end
+
+-- Add to history with proper checks
+function Neaterm:add_to_history(text, filetype)
+  if not text or text == "" or not filetype then return end
+  
+  if not self.history[filetype] then
+    self.history[filetype] = {}
+  end
+  
+  -- Remove duplicate if exists
+  for i, item in ipairs(self.history[filetype]) do
+    if item == text then
+      table.remove(self.history[filetype], i)
+      break
+    end
+  end
+  
+  -- Add to start of history
+  table.insert(self.history[filetype], 1, text)
+  
+  -- Limit history size
+  while #self.history[filetype] > (self.opts.repl.max_history or 100) do
+    table.remove(self.history[filetype])
+  end
+  
+  -- Save history if enabled
+  if self.opts.repl.save_history then
+    self:save_repl_history()
+  end
+end
+
+-- Send text to REPL with proper checks
+function Neaterm:send_text(text)
+  if not self.current_repl or not self.terminals[self.current_repl.buf] then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+  
+  local formatted_text = tostring(text)
+  if not formatted_text:match("\n$") then
+    formatted_text = formatted_text .. "\n"
+  end
+  
+  local job_id = self.terminals[self.current_repl.buf].job_id
+  if job_id then
+    api.nvim_chan_send(job_id, formatted_text)
+  end
+end
+
+-- Clear REPL
+function Neaterm:clear_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+  
+  self:send_text("\x0c") -- Send Ctrl-L to clear screen
+end
+
+-- Restart REPL
+function Neaterm:restart_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+  
+  local current_config = {
+    cmd = self.current_repl.config.cmd,
+    type = self.current_repl.type,
+    filetype = self.current_repl.filetype
+  }
+  
+  self:safe_close_repl()
+  
+  vim.defer_fn(function()
+    self:start_repl(current_config)
+  end, 100)
+end
+
+-- Focus terminal bar
+function Neaterm:focus_bar()
+  if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
+    api.nvim_set_current_win(self.bar_win)
+  end
+end
+
+-- Toggle terminal
+function Neaterm:toggle_terminal()
+  if not self.current_terminal then
+    self:create_terminal({ type = 'float' })
+  else
+    local win = self.terminals[self.current_terminal].window
+    if api.nvim_win_is_valid(win) then
+      api.nvim_win_close(win, true)
+      self.current_terminal = nil
+    end
+  end
+end
+
+-- Close current terminal
+function Neaterm:close_current_terminal()
+  if self.current_terminal then
+    local term = self.terminals[self.current_terminal]
+    if term and term.window and api.nvim_win_is_valid(term.window) then
+      api.nvim_win_close(term.window, true)
+    end
+    self:cleanup_terminal(self.current_terminal)
+  end
+end
+
+-- Show terminal
+function Neaterm:show_terminal(buf)
+  if not buf or not self.terminals[buf] then return end
+  
+  local term = self.terminals[buf]
+  if not api.nvim_win_is_valid(term.window) then
+    -- Recreate window if invalid
+    term.window = utils.create_window(self.opts, { type = term.type }, buf)
+  end
+  
+  api.nvim_set_current_win(term.window)
+  self.current_terminal = buf
+  ui.update_bar(self)
+end
 
 return Neaterm
