@@ -70,12 +70,13 @@ function M.start_repl(neaterm, cmd, filetype)
     M.close_repl(neaterm)
   end
 
-  local term_id = neaterm:create_terminal({
-    cmd = cmd,
-    on_stdout = function(data)
-      M.process_output(neaterm, data, filetype)
-    end
-  })
+  -- Create terminal with the REPL command
+  local term_opts = {
+    cmd = tostring(cmd),
+    type = 'float', -- or whatever default type you want
+  }
+  
+  local term_id = neaterm:create_terminal(term_opts)
 
   neaterm.current_repl = {
     term_id = term_id,
@@ -87,9 +88,12 @@ function M.start_repl(neaterm, cmd, filetype)
   -- Execute startup commands if any
   local config = M.repl_configs[filetype]
   if config and config.startup_cmds then
-    for _, startup_cmd in ipairs(config.startup_cmds) do
-      M.send_command(neaterm, startup_cmd)
-    end
+    -- Wait a bit for the REPL to initialize
+    vim.defer_fn(function()
+      for _, startup_cmd in ipairs(config.startup_cmds) do
+        M.send_command(neaterm, startup_cmd)
+      end
+    end, 100)
   end
 end
 
@@ -103,9 +107,12 @@ end
 function M.send_command(neaterm, cmd)
   if not neaterm.current_repl then return end
   
-  local term_id = neaterm.current_repl.term_id
-  table.insert(M.history, cmd)
-  neaterm:send_text(term_id, cmd .. "\n")
+  -- Ensure cmd is a string
+  local command = tostring(cmd)
+  table.insert(M.history, command)
+  
+  -- Send the command to the terminal
+  neaterm:send_text(command)
 end
 
 -- Code sending functions
@@ -123,7 +130,12 @@ function M.send_selection(neaterm)
     end_pos[2] - 1, end_pos[3],
     {}
   )
-  M.send_command(neaterm, table.concat(lines, "\n"))
+  
+  -- Join lines and ensure it's a string
+  local text = table.concat(lines, "\n")
+  if text and text ~= "" then
+    M.send_command(neaterm, text)
+  end
 end
 
 function M.send_buffer(neaterm)

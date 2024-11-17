@@ -303,8 +303,13 @@ function Neaterm:move_float(direction)
 end
 
 function Neaterm:send_text(text)
-  if self.terminals[self.current_terminal] then
-    api.nvim_chan_send(self.terminals[self.current_terminal].job_id, text)
+  if self.terminals[self.current_terminal] and self.terminals[self.current_terminal].job_id then
+    -- Ensure text is a string and ends with a newline
+    local formatted_text = tostring(text)
+    if not formatted_text:match("\n$") then
+      formatted_text = formatted_text .. "\n"
+    end
+    api.nvim_chan_send(self.terminals[self.current_terminal].job_id, formatted_text)
   end
 end
 
