@@ -7,14 +7,19 @@ local M = {}
 -- REPL configurations for different languages
 M.repl_configs = {
   python = {
-    cmd = "python",
-    prompt = ">>> ",
-    continue_prompt = "... ",
+    cmd = "ipython --no-autoindent --colors=NoColor",
+    prompt = "In [\\d+]: ",
+    continue_prompt = "   ....: ",
     startup_cmds = {
+      "%colors NoColor",
       "import sys",
-      "sys.ps1 = '>>> '",
-      "sys.ps2 = '... '"
-    }
+      "sys.ps1 = 'In []: '",
+      "sys.ps2 = '   ....: '",
+      "import numpy as np",  -- Common imports
+      "import pandas as pd",
+    },
+    get_variables_cmd = "whos",  -- IPython command to list variables
+    inspect_variable_cmd = "?",  -- IPython inspect command
   },
   r = {
     cmd = "R",
@@ -65,15 +70,15 @@ function M.create_repl(neaterm, opts)
 end
 
 function M.start_repl(neaterm, cmd, filetype)
-  -- Safe close existing REPL if any
-  if neaterm.current_repl then
-    M.close_repl(neaterm)
-  end
+  -- Safely close existing REPL
+  M.safe_close_repl(neaterm)
 
   -- Create terminal with the REPL command
   local term_opts = {
     cmd = tostring(cmd),
-    type = 'float', -- or whatever default type you want
+    type = 'float',
+    float_width = 0.6,  -- Wider for better output visibility
+    float_height = 0.4,
   }
   
   local term_id = neaterm:create_terminal(term_opts)
@@ -82,25 +87,54 @@ function M.start_repl(neaterm, cmd, filetype)
     term_id = term_id,
     filetype = filetype,
     history = {},
-    variables = {}
+    variables = {},
+    last_update = os.time(),
   }
 
-  -- Execute startup commands if any
+  -- Execute startup commands
   local config = M.repl_configs[filetype]
   if config and config.startup_cmds then
-    -- Wait a bit for the REPL to initialize
     vim.defer_fn(function()
-      for _, startup_cmd in ipairs(config.startup_cmds) do
-        M.send_command(neaterm, startup_cmd)
+      for _, cmd in ipairs(config.startup_cmds) do
+        M.send_command(neaterm, cmd)
       end
+      -- Update variables after startup
+      M.update_variables(neaterm)
+    end, 500)
+  end
+end
+
+function M.safe_close_repl(neaterm)
+  if neaterm.current_repl then
+    -- Send exit command based on filetype
+    local exit_cmd = {
+      python = "exit()",
+      r = "q()",
+      julia = "exit()",
+      lua = "os.exit()",
+    }
+    local cmd = exit_cmd[neaterm.current_repl.filetype]
+    if cmd then
+      M.send_command(neaterm, cmd)
+    end
+    
+    -- Wait briefly before closing
+    vim.defer_fn(function()
+      neaterm:close_terminal(neaterm.current_repl.term_id)
+      neaterm.current_repl = nil
     end, 100)
   end
 end
 
-function M.close_repl(neaterm)
-  if neaterm.current_repl then
-    neaterm:close_terminal(neaterm.current_repl.term_id)
-    neaterm.current_repl = nil
+-- New function to update variables
+function M.update_variables(neaterm)
+  if not neaterm.current_repl then return end
+  
+  local config = M.repl_configs[neaterm.current_repl.filetype]
+  if config and config.get_variables_cmd then
+    -- Capture output of variables command
+    M.send_command(neaterm, config.get_variables_cmd)
+    -- Parse output and update M.variables (implementation depends on REPL output format)
   end
 end
 
@@ -156,13 +190,27 @@ function M.show_history(neaterm)
 end
 
 function M.show_variables(neaterm)
+  -- Update variables before showing
+  M.update_variables(neaterm)
+  
   local vars = vim.tbl_keys(M.variables)
   fzf.fzf_exec(vars, {
     prompt = "REPL Variables > ",
     actions = {
       ["default"] = function(selected)
-        -- Show variable details
-        print(M.variables[selected[1]])
+        local var = selected[1]
+        -- Send inspect command for the variable
+        local config = M.repl_configs[neaterm.current_repl.filetype]
+        if config.inspect_variable_cmd then
+          M.send_command(neaterm, var .. config.inspect_variable_cmd)
+        end
+      end,
+      ["ctrl-e"] = function(selected)
+        -- Edit variable in new buffer
+        local var = selected[1]
+        local value = M.variables[var]
+        vim.cmd('new')
+        vim.api.nvim_buf_set_lines(0, 0, -1, false, {value})
       end
     }
   })
