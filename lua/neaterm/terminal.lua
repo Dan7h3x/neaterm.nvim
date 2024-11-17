@@ -88,24 +88,42 @@ end
 function Neaterm:create_terminal(opts)
   opts = opts or {}
   local buf = api.nvim_create_buf(false, true)
+  
+  -- Set buffer options
   api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
-
+  
   local win = utils.create_window(self.opts, opts, buf)
   local term_id = fn.termopen(opts.cmd or self.opts.shell, {
-    on_exit = function() self:cleanup_terminal(buf) end
+    on_exit = function(_, code)
+      -- Suppress exit message and cleanup silently
+      if code == 0 then
+        vim.schedule(function()
+          if api.nvim_buf_is_valid(buf) then
+            -- Clear buffer content
+            api.nvim_buf_set_lines(buf, 0, -1, false, {})
+            -- Close window if it exists
+            if api.nvim_win_is_valid(win) then
+              api.nvim_win_close(win, true)
+            end
+            -- Delete buffer
+            api.nvim_buf_delete(buf, { force = true })
+          end
+        end)
+      end
+    end
   })
-
+  
   self.terminals[buf] = {
     window = win,
     job_id = term_id,
     type = opts.type,
     cmd = opts.cmd
   }
-
+  
   self.current_terminal = buf
   self:setup_terminal_settings(win, buf)
   ui.update_bar(self)
-
+  
   return buf
 end
 
@@ -300,37 +318,73 @@ function Neaterm:update_variables()
 end
 
 function Neaterm:show_variables()
-  self:update_variables()
-
-  local items = {}
-  for name, info in pairs(self.variables) do
-    table.insert(items, {
-      name = name,
-      info = info
-    })
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
   end
 
-  require('fzf-lua').fzf_exec(
-    vim.tbl_map(function(item)
-      return string.format("%-20s [%s] (%s)", item.name, item.info.type, item.info.size)
-    end, items),
-    {
-      prompt = "REPL Variables > ",
-      actions = {
-        ["default"] = function(selected)
-          local name = selected[1]:match("^([^%s]+)")
-          local config = self.repl_configs[self.current_repl.filetype]
-          if config.inspect_variable_cmd then
-            self:send_text(name .. config.inspect_variable_cmd)
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config or not config.get_variables_cmd then
+    vim.notify("Variable inspection not supported for this REPL", vim.log.levels.WARN)
+    return
+  end
+
+  -- Create temporary buffer for output
+  local temp_buf = api.nvim_create_buf(false, true)
+  local output = ""
+  
+  -- Setup output capture
+  api.nvim_buf_attach(temp_buf, false, {
+    on_lines = function(_, _, _, first_line, last_line)
+      local lines = api.nvim_buf_get_lines(temp_buf, first_line, last_line, false)
+      output = output .. table.concat(lines, "\n")
+    end
+  })
+
+  -- Send command and wait briefly for output
+  self:send_text(config.get_variables_cmd)
+  
+  vim.defer_fn(function()
+    -- Parse the captured output
+    local vars = self:parse_repl_output(output, self.current_repl.filetype)
+    
+    -- Clean up temporary buffer
+    api.nvim_buf_delete(temp_buf, { force = true })
+    
+    -- Show variables in fzf
+    require('fzf-lua').fzf_exec(
+      vim.tbl_map(function(var) return var.display end, vars),
+      {
+        prompt = "REPL Variables > ",
+        actions = {
+          ["default"] = function(selected)
+            local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
+            for _, var in ipairs(vars) do
+              if var.name == name then
+                if config.inspect_variable_cmd then
+                  local cmd = config.inspect_variable_cmd
+                  if cmd:sub(-1) ~= ")" then
+                    cmd = cmd .. ")"
+                  end
+                  self:send_text(name .. config.inspect_variable_cmd)
+                end
+                break
+              end
+            end
+          end,
+          ["ctrl-e"] = function(selected)
+            local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
+            self:edit_variable(name)
           end
-        end,
-        ["ctrl-e"] = function(selected)
-          local name = selected[1]:match("^([^%s]+)")
-          self:edit_variable(name)
-        end
+        },
+        fzf_opts = {
+          ["--delimiter"] = "│",
+          ["--with-nth"] = "1,2,3",
+          ["--header"] = "Name                 │ Type       │ Size",
+        },
       }
-    }
-  )
+    )
+  end, 100) -- Adjust timeout as needed
 end
 
 -- History Management Methods
@@ -660,6 +714,76 @@ function Neaterm:show_terminal(buf)
   api.nvim_set_current_win(term.window)
   self.current_terminal = buf
   ui.update_bar(self)
+end
+
+-- Add REPL output parsing
+function Neaterm:parse_repl_output(output, filetype)
+  local config = self.repl_configs[filetype]
+  if not config then return {} end
+
+  local parsers = {
+    python = function(out)
+      local vars = {}
+      for line in out:gmatch("[^\r\n]+") do
+        -- Match IPython's whos output format
+        local var_type, name, size, info = line:match("(%w+)%s+(%w+)%s+(%d+)%s*(.*)")
+        if name then
+          vars[#vars + 1] = {
+            name = name,
+            type = var_type,
+            size = size,
+            info = info:gsub("^%s*(.-)%s*$", "%1"), -- trim
+            display = string.format("%-20s │ %-10s │ %s", name, var_type, size)
+          }
+        end
+      end
+      return vars
+    end,
+    
+    r = function(out)
+      local vars = {}
+      -- Parse ls() output and get more info using str()
+      for name in out:gmatch("[%w_.]+") do
+        -- Use str() to get type information
+        local str_cmd = string.format("str(%s)", name)
+        self:send_text(str_cmd)
+        -- TODO: Implement proper output capture for R
+        vars[#vars + 1] = {
+          name = name,
+          type = "object", -- This should be parsed from str() output
+          display = string.format("%-20s │ %-10s", name, "object")
+        }
+      end
+      return vars
+    end,
+    
+    julia = function(out)
+      local vars = {}
+      for line in out:gmatch("[^\r\n]+") do
+        local name = line:match("^([%w_]+)")
+        if name then
+          -- Get type information using typeof()
+          local type_cmd = string.format("typeof(%s)", name)
+          self:send_text(type_cmd)
+          -- TODO: Implement proper output capture for Julia
+          vars[#vars + 1] = {
+            name = name,
+            type = "variable",
+            display = string.format("%-20s │ %-10s", name, "variable")
+          }
+        end
+      end
+      return vars
+    end
+  }
+
+  -- Use custom parser if defined in config
+  if config.parse_output then
+    return config.parse_output(output)
+  end
+  
+  -- Use default parser for the language if available
+  return (parsers[filetype] or function() return {} end)(output)
 end
 
 return Neaterm

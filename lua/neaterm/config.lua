@@ -67,21 +67,26 @@ local default_opts = {
       exit_cmd = "exit()",
     },
     r = {
-      name = "R Statistical Computing",
-      cmd = "R --no-save",
-      -- startup_cmds = {
-      --   "library(tidyverse)",
-      --   "library(ggplot2)",
-      -- },
-      get_variables_cmd = "ls()",
-      inspect_variable_cmd = "str(", -- Will be appended with ")"
-      exit_cmd = "q()",
-      parse_variables = function(output)
+      name = "R (Radian)",
+      cmd = "radian",
+      startup_cmds = {
+        "options(width = 80)",
+        "options(prompt = 'R> ')",
+      },
+      get_variables_cmd = "ls.str()",
+      inspect_variable_cmd = "str(",
+      exit_cmd = "q(save='no')",
+      parse_output = function(output)
         local vars = {}
-        for name in output:gmatch("[%w_]+") do
-          local type_cmd = string.format("class(%s)", name)
-          -- You might want to implement a way to get the actual type
-          vars[name] = { type = "unknown", size = "N/A" }
+        for line in output:gmatch("[^\r\n]+") do
+          local name, type = line:match("^(%w+)%s*:%s*(.+)$")
+          if name then
+            vars[#vars + 1] = {
+              name = name,
+              type = type,
+              display = string.format("%-20s │ %-30s", name, type)
+            }
+          end
         end
         return vars
       end
