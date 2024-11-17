@@ -153,25 +153,43 @@ end
 
 function Neaterm:start_repl(repl_config)
   -- Close existing REPL if any
-  self:safe_close_repl()
+  if self.current_repl then
+    self:safe_close_repl()
+    -- Wait for cleanup to complete
+    vim.defer_fn(function()
+      self:_create_new_repl(repl_config)
+    end, 150)
+  else
+    self:_create_new_repl(repl_config)
+  end
+end
 
+-- Helper method to create new REPL
+function Neaterm:_create_new_repl(repl_config)
   local buf = self:create_terminal({
     cmd = repl_config.cmd,
     type = repl_config.type,
   })
-
+  
+  if not buf then
+    vim.notify("Failed to create REPL terminal", vim.log.levels.ERROR)
+    return
+  end
+  
   self.current_repl = {
     buf = buf,
     filetype = repl_config.filetype,
     config = self.repl_configs[repl_config.filetype],
     type = repl_config.type
   }
-
-  -- Execute startup commands
+  
+  -- Execute startup commands after a delay
   if self.current_repl.config.startup_cmds then
     vim.defer_fn(function()
-      for _, cmd in ipairs(self.current_repl.config.startup_cmds) do
-        self:send_text(cmd)
+      if self.current_repl and self.terminals[buf] then
+        for _, cmd in ipairs(self.current_repl.config.startup_cmds) do
+          self:send_text(cmd)
+        end
       end
     end, 500)
   end
@@ -198,16 +216,36 @@ function Neaterm:save_repl_history()
 end
 
 -- Text Sending Methods
--- function Neaterm:send_text(text)
---   if not self.current_terminal then return end
---
---   local formatted_text = tostring(text)
---   if not formatted_text:match("\n$") then
---     formatted_text = formatted_text .. "\n"
---   end
---
---   api.nvim_chan_send(self.terminals[self.current_terminal].job_id, formatted_text)
--- end
+function Neaterm:send_text(text)
+  if not text then return end
+  
+  local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
+  if not term_buf or not self.terminals[term_buf] then
+    vim.notify("No active terminal", vim.log.levels.WARN)
+    return
+  end
+  
+  local term = self.terminals[term_buf]
+  if not term or not term.job_id then return end
+  
+  -- Check if job is still valid
+  local valid_job = vim.fn.jobwait({term.job_id}, 0)[1] == -1
+  if not valid_job then
+    vim.notify("Terminal job is no longer valid", vim.log.levels.WARN)
+    return
+  end
+  
+  local formatted_text = tostring(text)
+  if not formatted_text:match("\n$") then
+    formatted_text = formatted_text .. "\n"
+  end
+  
+  -- Safely send text to terminal
+  local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
+  if not success then
+    vim.notify("Failed to send text: " .. err, vim.log.levels.ERROR)
+  end
+end
 
 function Neaterm:send_line_to_repl()
   if not self.current_repl then
@@ -431,18 +469,43 @@ function Neaterm:cleanup_terminal(buf)
 end
 
 function Neaterm:safe_close_repl()
-  if self.current_repl then
-    local config = self.repl_configs[self.current_repl.filetype]
-    if config and config.exit_cmd then
-      self:send_text(config.exit_cmd)
-    end
-
-    vim.defer_fn(function()
-      if self.current_repl and self.current_repl.buf then
-        self:cleanup_terminal(self.current_repl.buf)
+  if not self.current_repl then return end
+  
+  local repl = self.current_repl
+  local config = self.repl_configs[repl.filetype]
+  
+  -- Only try to send exit command if terminal is still valid
+  if config and config.exit_cmd and self.terminals[repl.buf] then
+    local term = self.terminals[repl.buf]
+    if term and term.job_id then
+      local valid_job = vim.fn.jobwait({term.job_id}, 0)[1] == -1
+      if valid_job then
+        self:send_text(config.exit_cmd)
       end
-    end, 100)
+    end
   end
+  
+  -- Wait briefly before cleanup
+  vim.defer_fn(function()
+    if repl.buf and api.nvim_buf_is_valid(repl.buf) then
+      -- Close window if it exists
+      if self.terminals[repl.buf] and self.terminals[repl.buf].window then
+        local win = self.terminals[repl.buf].window
+        if api.nvim_win_is_valid(win) then
+          api.nvim_win_close(win, true)
+        end
+      end
+      
+      -- Delete buffer
+      pcall(api.nvim_buf_delete, repl.buf, { force = true })
+      
+      -- Clean up terminal entry
+      self.terminals[repl.buf] = nil
+    end
+    
+    -- Clear current REPL
+    self.current_repl = nil
+  end, 100)
 end
 
 -- Add this method to the Neaterm class
@@ -619,24 +682,6 @@ function Neaterm:add_to_history(text, filetype)
   -- Save history if enabled
   if self.opts.repl.save_history then
     self:save_repl_history()
-  end
-end
-
--- Send text to REPL with proper checks
-function Neaterm:send_text(text)
-  if not self.current_repl or not self.terminals[self.current_repl.buf] then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local formatted_text = tostring(text)
-  if not formatted_text:match("\n$") then
-    formatted_text = formatted_text .. "\n"
-  end
-
-  local job_id = self.terminals[self.current_repl.buf].job_id
-  if job_id then
-    api.nvim_chan_send(job_id, formatted_text)
   end
 end
 
