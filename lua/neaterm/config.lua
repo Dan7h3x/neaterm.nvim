@@ -35,6 +35,18 @@ local default_opts = {
     resize_left = '<C-S-Left>',
     resize_right = '<C-S-Right>',
     focus_bar = '<C-A-b>',
+    repl_toggle = '<leader>rt',
+    repl_send_line = '<leader>rl',
+    repl_send_selection = '<leader>rs',
+    repl_send_buffer = '<leader>rb',
+    repl_clear = '<leader>rc',
+  },
+  repl = {
+    float_width = 0.6,
+    float_height = 0.4,
+    auto_close = true,
+    save_history = true,
+    history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
   },
 }
 

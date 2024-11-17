@@ -9,6 +9,9 @@ function M.setup(user_opts)
   neaterm:setup()
 
   -- Add REPL-specific keymappings
+  vim.keymap.set('n', '<leader>rt', function() 
+    require('neaterm.repl').show_repl_menu(neaterm) 
+  end, { desc = "Toggle REPL menu" })
   vim.keymap.set('n', '<leader>rr', function() require('neaterm.repl').create_repl(neaterm) end)
   vim.keymap.set('n', '<leader>rc', function() require('neaterm.repl').close_repl(neaterm) end)
   vim.keymap.set('n', '<leader>rl', function() require('neaterm.repl').send_line(neaterm) end)
