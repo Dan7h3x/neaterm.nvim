@@ -30,30 +30,46 @@ end
 
 function M.create_user_commands(neaterm)
   local commands = {
-    NeatermVertical = { callback = function(opts) 
-      neaterm:create_terminal({ type = 'vertical', cmd = opts.args }) 
-    end },
-    NeatermHorizontal = { callback = function(opts) 
-      neaterm:create_terminal({ type = 'horizontal', cmd = opts.args }) 
-    end },
-    NeatermFloat = { callback = function(opts) 
-      neaterm:create_terminal({ type = 'float', cmd = opts.args }) 
-    end },
-    NeatermFull = { callback = function(opts) 
-      neaterm:create_terminal({ type = 'full', cmd = opts.args }) 
-    end },
-    NeatermToggle = { callback = function() 
-      neaterm:toggle_terminal() 
-    end },
-    NeatermREPL = { callback = function() 
-      neaterm:show_repl_menu() 
-    end },
-    NeatermHistory = { callback = function() 
-      neaterm:show_history() 
-    end },
-    NeatermVariables = { callback = function() 
-      neaterm:show_variables() 
-    end },
+    NeatermVertical = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'vertical', cmd = opts.args })
+      end
+    },
+    NeatermHorizontal = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'horizontal', cmd = opts.args })
+      end
+    },
+    NeatermFloat = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'float', cmd = opts.args })
+      end
+    },
+    NeatermFull = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'full', cmd = opts.args })
+      end
+    },
+    NeatermToggle = {
+      callback = function()
+        neaterm:toggle_terminal()
+      end
+    },
+    NeatermREPL = {
+      callback = function()
+        neaterm:show_repl_menu()
+      end
+    },
+    NeatermHistory = {
+      callback = function()
+        neaterm:show_history()
+      end
+    },
+    NeatermVariables = {
+      callback = function()
+        neaterm:show_variables()
+      end
+    },
   }
 
   for name, cmd in pairs(commands) do
@@ -94,16 +110,16 @@ function M.get_visual_selection()
   local start_pos = vim.fn.getpos("'<")
   local end_pos = vim.fn.getpos("'>")
   local lines = api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
-  
+
   if #lines == 0 then return "" end
-  
+
   if #lines == 1 then
     lines[1] = lines[1]:sub(start_pos[3], end_pos[3])
   else
     lines[1] = lines[1]:sub(start_pos[3])
     lines[#lines] = lines[#lines]:sub(1, end_pos[3])
   end
-  
+
   return table.concat(lines, "\n")
 end
 

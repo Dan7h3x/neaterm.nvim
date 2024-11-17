@@ -4,18 +4,18 @@ local M = {}
 
 function M.create_bar(neaterm)
   neaterm.bar_buf = api.nvim_create_buf(false, true)
-  
+
   local buf_opts = {
     buftype = 'nofile',
     filetype = 'neaterm',
     bufhidden = 'hide',
     swapfile = false,
   }
-  
+
   for opt, value in pairs(buf_opts) do
     api.nvim_set_option_value(opt, value, { buf = neaterm.bar_buf })
   end
-  
+
   local win_opts = {
     relative = 'editor',
     width = 20,
@@ -25,10 +25,10 @@ function M.create_bar(neaterm)
     style = 'minimal',
     border = neaterm.opts.border
   }
-  
+
   neaterm.bar_win = api.nvim_open_win(neaterm.bar_buf, false, win_opts)
   api.nvim_win_set_option(neaterm.bar_win, 'winhl', 'Normal:NeatermNormal,FloatBorder:NeatermBorder')
-  
+
   -- Setup bar keymaps
   vim.keymap.set('n', '<CR>', function()
     local cursor_pos = api.nvim_win_get_cursor(neaterm.bar_win)
@@ -38,7 +38,7 @@ function M.create_bar(neaterm)
       neaterm:show_terminal(terminals[term_index])
     end
   end, { buffer = neaterm.bar_buf, silent = true })
-  
+
   M.update_bar(neaterm)
 end
 
@@ -63,7 +63,7 @@ function M.update_bar(neaterm)
 
   local bar_content = {}
   local total_length = 0
-  
+
   for i, term in ipairs(terminals) do
     local is_repl = neaterm.current_repl and neaterm.current_repl.buf == term
     local is_current = term == neaterm.current_terminal
@@ -79,7 +79,7 @@ function M.update_bar(neaterm)
     table.insert(bar_content, item)
     total_length = total_length + #item + 1
   end
-  
+
   total_length = total_length - 1
 
   local bar_text = table.concat(bar_content, " ")
@@ -102,3 +102,4 @@ function M.setup_highlights(opts)
 end
 
 return M
+

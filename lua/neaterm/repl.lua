@@ -44,13 +44,13 @@ function M.safe_close_repl(neaterm)
       lua = "os.exit()",
       node = ".exit",
     }
-    
+
     if repl.buf and api.nvim_buf_is_valid(repl.buf) then
       -- Send exit command if available
       if exit_cmds[repl.filetype] then
         neaterm:send_text(exit_cmds[repl.filetype])
       end
-      
+
       -- Wait briefly before closing
       vim.defer_fn(function()
         if api.nvim_buf_is_valid(repl.buf) then
@@ -58,7 +58,7 @@ function M.safe_close_repl(neaterm)
         end
       end, 100)
     end
-    
+
     neaterm.current_repl = nil
   end
 end
@@ -66,24 +66,24 @@ end
 function M.start_repl(neaterm, opts)
   -- Close existing REPL if any
   M.safe_close_repl(neaterm)
-  
+
   local term_opts = {
     cmd = opts.cmd,
     type = opts.type or 'float',
     float_width = neaterm.opts.repl.float_width or 0.6,
     float_height = neaterm.opts.repl.float_height or 0.4,
   }
-  
+
   local buf = neaterm:create_terminal(term_opts)
   if not buf then return end
-  
+
   neaterm.current_repl = {
     buf = buf,
     filetype = opts.filetype,
     config = M.repl_configs[opts.filetype],
     type = opts.type,
   }
-  
+
   -- Execute startup commands if available
   if neaterm.current_repl.config and neaterm.current_repl.config.startup_cmds then
     vim.defer_fn(function()
@@ -92,7 +92,7 @@ function M.start_repl(neaterm, opts)
       end
     end, 500)
   end
-  
+
   -- Track active REPLs
   M.active_repls[buf] = neaterm.current_repl
 end
@@ -100,7 +100,7 @@ end
 function M.send_to_repl(neaterm, text)
   if neaterm.current_repl and neaterm.current_repl.buf then
     -- Add to history
-    add_to_history(text, neaterm.current_repl.filetype)
+    M.add_to_history(text, neaterm.current_repl.filetype)
     -- Send to REPL
     neaterm:send_text(text)
   else
@@ -140,7 +140,7 @@ function M.clear_repl(neaterm)
 end
 
 -- Add function to add to history
-local function add_to_history(cmd, filetype)
+function M.add_to_history(cmd, filetype)
   if not M.history[filetype] then
     M.history[filetype] = {}
   end

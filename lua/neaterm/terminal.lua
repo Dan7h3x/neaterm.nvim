@@ -34,7 +34,7 @@ end
 
 function Neaterm:setup_keymaps()
   local opts = { noremap = true, silent = true }
-  
+
   -- Terminal management
   local maps = {
     -- Basic terminal operations
@@ -43,23 +43,23 @@ function Neaterm:setup_keymaps()
     [self.opts.keymaps.new_horizontal] = function() self:create_terminal({ type = 'horizontal' }) end,
     [self.opts.keymaps.new_float] = function() self:create_terminal({ type = 'float' }) end,
     [self.opts.keymaps.close] = function() self:close_current_terminal() end,
-    
+
     -- Terminal navigation
     [self.opts.keymaps.next] = function() self:next_terminal() end,
     [self.opts.keymaps.prev] = function() self:prev_terminal() end,
-    
+
     -- Terminal movement
     [self.opts.keymaps.move_up] = function() self:move_terminal('up') end,
     [self.opts.keymaps.move_down] = function() self:move_terminal('down') end,
     [self.opts.keymaps.move_left] = function() self:move_terminal('left') end,
     [self.opts.keymaps.move_right] = function() self:move_terminal('right') end,
-    
+
     -- Terminal resizing
     [self.opts.keymaps.resize_up] = function() self:resize_terminal('up') end,
     [self.opts.keymaps.resize_down] = function() self:resize_terminal('down') end,
     [self.opts.keymaps.resize_left] = function() self:resize_terminal('left') end,
     [self.opts.keymaps.resize_right] = function() self:resize_terminal('right') end,
-    
+
     -- REPL operations
     [self.opts.keymaps.repl_toggle] = function() self:show_repl_menu() end,
     [self.opts.keymaps.repl_send_line] = function() self:send_line_to_repl() end,
@@ -68,16 +68,16 @@ function Neaterm:setup_keymaps()
     [self.opts.keymaps.repl_history] = function() self:show_history() end,
     [self.opts.keymaps.repl_variables] = function() self:show_variables() end,
     [self.opts.keymaps.repl_restart] = function() self:restart_repl() end,
-    
+
     -- Bar operations
     [self.opts.keymaps.focus_bar] = function() self:focus_bar() end,
   }
-  
+
   -- Set normal mode mappings
   for key, func in pairs(maps) do
     vim.keymap.set('n', key, func, opts)
   end
-  
+
   -- Set visual mode mapping for REPL selection
   vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
     self:send_selection_to_repl()
@@ -89,23 +89,23 @@ function Neaterm:create_terminal(opts)
   opts = opts or {}
   local buf = api.nvim_create_buf(false, true)
   api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
-  
+
   local win = utils.create_window(self.opts, opts, buf)
   local term_id = fn.termopen(opts.cmd or self.opts.shell, {
     on_exit = function() self:cleanup_terminal(buf) end
   })
-  
+
   self.terminals[buf] = {
     window = win,
     job_id = term_id,
     type = opts.type,
     cmd = opts.cmd
   }
-  
+
   self.current_terminal = buf
   self:setup_terminal_settings(win, buf)
   ui.update_bar(self)
-  
+
   return buf
 end
 
@@ -113,7 +113,7 @@ end
 function Neaterm:show_repl_menu()
   local current_ft = vim.bo.filetype
   local items = self:get_repl_menu_items(current_ft)
-  
+
   require('fzf-lua').fzf_exec(
     vim.tbl_map(function(item) return item.name end, items),
     {
@@ -136,19 +136,19 @@ end
 function Neaterm:start_repl(repl_config)
   -- Close existing REPL if any
   self:safe_close_repl()
-  
+
   local buf = self:create_terminal({
     cmd = repl_config.cmd,
     type = repl_config.type,
   })
-  
+
   self.current_repl = {
     buf = buf,
     filetype = repl_config.filetype,
     config = self.repl_configs[repl_config.filetype],
     type = repl_config.type
   }
-  
+
   -- Execute startup commands
   if self.current_repl.config.startup_cmds then
     vim.defer_fn(function()
@@ -175,33 +175,32 @@ function Neaterm:save_repl_history()
   local history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json'
   local ok, encoded = pcall(vim.json.encode, self.history)
   if ok then
-    vim.fn.writefile({encoded}, history_file)
+    vim.fn.writefile({ encoded }, history_file)
   end
 end
 
 -- Text Sending Methods
-function Neaterm:send_text(text)
-  if not self.current_terminal then return end
-  
-  local formatted_text = tostring(text)
-  if not formatted_text:match("\n$") then
-    formatted_text = formatted_text .. "\n"
-  end
-  
-  api.nvim_chan_send(self.terminals[self.current_terminal].job_id, formatted_text)
-end
+-- function Neaterm:send_text(text)
+--   if not self.current_terminal then return end
+--
+--   local formatted_text = tostring(text)
+--   if not formatted_text:match("\n$") then
+--     formatted_text = formatted_text .. "\n"
+--   end
+--
+--   api.nvim_chan_send(self.terminals[self.current_terminal].job_id, formatted_text)
+-- end
 
 function Neaterm:send_line_to_repl()
   if not self.current_repl then
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   local line = api.nvim_get_current_line()
   self:add_to_history(line, self.current_repl.filetype)
   self:send_text(line)
 end
-
 
 -- REPL Configuration Methods
 function Neaterm:setup_repl_configs()
@@ -209,9 +208,8 @@ function Neaterm:setup_repl_configs()
   self.repl_configs = {
     python = {
       name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors=NoColor",
+      cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "%colors NoColor",
         "import sys",
         "sys.ps1 = 'In []: '",
         "sys.ps2 = '   ....: '",
@@ -248,7 +246,7 @@ end
 
 function Neaterm:get_repl_menu_items(filetype)
   local items = {}
-  
+
   -- Add default REPL for current filetype if available
   if self.repl_configs[filetype] then
     local config = self.repl_configs[filetype]
@@ -259,10 +257,10 @@ function Neaterm:get_repl_menu_items(filetype)
       filetype = filetype
     })
   end
-  
+
   -- Add all layouts for each REPL
   for ft, config in pairs(self.repl_configs) do
-    for _, layout in ipairs({"Float", "Vertical", "Horizontal"}) do
+    for _, layout in ipairs({ "Float", "Vertical", "Horizontal" }) do
       table.insert(items, {
         name = string.format("%s (%s)", config.name, layout),
         cmd = config.cmd,
@@ -271,39 +269,39 @@ function Neaterm:get_repl_menu_items(filetype)
       })
     end
   end
-  
+
   return items
 end
 
 -- Variable Management Methods
 function Neaterm:update_variables()
   if not self.current_repl then return end
-  
+
   local config = self.repl_configs[self.current_repl.filetype]
   if not config or not config.get_variables_cmd then return end
-  
+
   local buf = api.nvim_create_buf(false, true)
   local chan = self.terminals[self.current_repl.buf].job_id
-  
+
   api.nvim_buf_attach(buf, false, {
     on_lines = function(_, _, _, first_line, last_line)
       local lines = api.nvim_buf_get_lines(buf, first_line, last_line, false)
       local output = table.concat(lines, "\n")
-      
+
       if config.parse_variables then
         self.variables = config.parse_variables(output)
       end
-      
+
       api.nvim_buf_delete(buf, { force = true })
     end
   })
-  
+
   self:send_text(config.get_variables_cmd)
 end
 
 function Neaterm:show_variables()
   self:update_variables()
-  
+
   local items = {}
   for name, info in pairs(self.variables) do
     table.insert(items, {
@@ -311,7 +309,7 @@ function Neaterm:show_variables()
       info = info
     })
   end
-  
+
   require('fzf-lua').fzf_exec(
     vim.tbl_map(function(item)
       return string.format("%-20s [%s] (%s)", item.name, item.info.type, item.info.size)
@@ -341,13 +339,13 @@ function Neaterm:show_history()
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   local ft = self.current_repl.filetype
   if not self.history[ft] or #self.history[ft] == 0 then
     vim.notify("No history for " .. ft, vim.log.levels.INFO)
     return
   end
-  
+
   require('fzf-lua').fzf_exec(
     self.history[ft],
     {
@@ -384,7 +382,7 @@ function Neaterm:safe_close_repl()
     if config and config.exit_cmd then
       self:send_text(config.exit_cmd)
     end
-    
+
     vim.defer_fn(function()
       if self.current_repl and self.current_repl.buf then
         self:cleanup_terminal(self.current_repl.buf)
@@ -402,22 +400,22 @@ function Neaterm:setup_terminal_settings(win, buf)
     signcolumn = "no",
     wrap = false,
   }
-  
+
   for opt, value in pairs(win_opts) do
     api.nvim_win_set_option(win, opt, value)
   end
-  
+
   -- Buffer-specific settings
   local buf_opts = {
     bufhidden = "hide",
     filetype = "neaterm",
     buflisted = false,
   }
-  
+
   for opt, value in pairs(buf_opts) do
     api.nvim_buf_set_option(buf, opt, value)
   end
-  
+
   -- Terminal-specific keymaps
   local term_maps = {
     ['<C-\\><C-n>'] = '<Cmd>startinsert<CR>',
@@ -426,11 +424,11 @@ function Neaterm:setup_terminal_settings(win, buf)
     ['<C-k>'] = '<Cmd>wincmd k<CR>',
     ['<C-l>'] = '<Cmd>wincmd l<CR>',
   }
-  
+
   for lhs, rhs in pairs(term_maps) do
     vim.keymap.set('t', lhs, rhs, { buffer = buf, silent = true })
   end
-  
+
   -- Auto-enter insert mode when focusing terminal
   api.nvim_create_autocmd("BufEnter", {
     buffer = buf,
@@ -444,7 +442,7 @@ end
 function Neaterm:next_terminal()
   local terminals = vim.tbl_keys(self.terminals)
   if #terminals == 0 then return end
-  
+
   local current_index = 1
   for i, buf in ipairs(terminals) do
     if buf == self.current_terminal then
@@ -452,7 +450,7 @@ function Neaterm:next_terminal()
       break
     end
   end
-  
+
   local next_index = current_index % #terminals + 1
   self:show_terminal(terminals[next_index])
 end
@@ -460,7 +458,7 @@ end
 function Neaterm:prev_terminal()
   local terminals = vim.tbl_keys(self.terminals)
   if #terminals == 0 then return end
-  
+
   local current_index = 1
   for i, buf in ipairs(terminals) do
     if buf == self.current_terminal then
@@ -468,7 +466,7 @@ function Neaterm:prev_terminal()
       break
     end
   end
-  
+
   local prev_index = (current_index - 2) % #terminals + 1
   self:show_terminal(terminals[prev_index])
 end
@@ -476,10 +474,10 @@ end
 -- Add movement and resize methods
 function Neaterm:move_terminal(direction)
   if not self.current_terminal then return end
-  
+
   local win = self.terminals[self.current_terminal].window
   if not api.nvim_win_is_valid(win) then return end
-  
+
   local amount = self.opts.move_amount or 3
   local cmd = {
     up = string.format('move -%d', amount),
@@ -487,16 +485,16 @@ function Neaterm:move_terminal(direction)
     left = string.format('vertical resize -%d', amount),
     right = string.format('vertical resize +%d', amount),
   }
-  
+
   vim.cmd(cmd[direction])
 end
 
 function Neaterm:resize_terminal(direction)
   if not self.current_terminal then return end
-  
+
   local win = self.terminals[self.current_terminal].window
   if not api.nvim_win_is_valid(win) then return end
-  
+
   local amount = self.opts.resize_amount or 2
   local cmd = {
     up = string.format('resize +%d', amount),
@@ -504,7 +502,7 @@ function Neaterm:resize_terminal(direction)
     left = string.format('vertical resize -%d', amount),
     right = string.format('vertical resize +%d', amount),
   }
-  
+
   vim.cmd(cmd[direction])
 end
 
@@ -516,10 +514,10 @@ function Neaterm:send_buffer_to_repl()
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
   local text = table.concat(lines, "\n")
-  
+
   if text ~= "" then
     self:add_to_history(text, self.current_repl.filetype)
     self:send_text(text)
@@ -532,7 +530,7 @@ function Neaterm:send_selection_to_repl()
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   local text = utils.get_visual_selection()
   if text ~= "" then
     self:add_to_history(text, self.current_repl.filetype)
@@ -543,11 +541,11 @@ end
 -- Add to history with proper checks
 function Neaterm:add_to_history(text, filetype)
   if not text or text == "" or not filetype then return end
-  
+
   if not self.history[filetype] then
     self.history[filetype] = {}
   end
-  
+
   -- Remove duplicate if exists
   for i, item in ipairs(self.history[filetype]) do
     if item == text then
@@ -555,15 +553,15 @@ function Neaterm:add_to_history(text, filetype)
       break
     end
   end
-  
+
   -- Add to start of history
   table.insert(self.history[filetype], 1, text)
-  
+
   -- Limit history size
   while #self.history[filetype] > (self.opts.repl.max_history or 100) do
     table.remove(self.history[filetype])
   end
-  
+
   -- Save history if enabled
   if self.opts.repl.save_history then
     self:save_repl_history()
@@ -576,12 +574,12 @@ function Neaterm:send_text(text)
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   local formatted_text = tostring(text)
   if not formatted_text:match("\n$") then
     formatted_text = formatted_text .. "\n"
   end
-  
+
   local job_id = self.terminals[self.current_repl.buf].job_id
   if job_id then
     api.nvim_chan_send(job_id, formatted_text)
@@ -594,7 +592,7 @@ function Neaterm:clear_repl()
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   self:send_text("\x0c") -- Send Ctrl-L to clear screen
 end
 
@@ -604,15 +602,15 @@ function Neaterm:restart_repl()
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
-  
+
   local current_config = {
     cmd = self.current_repl.config.cmd,
     type = self.current_repl.type,
     filetype = self.current_repl.filetype
   }
-  
+
   self:safe_close_repl()
-  
+
   vim.defer_fn(function()
     self:start_repl(current_config)
   end, 100)
@@ -652,13 +650,13 @@ end
 -- Show terminal
 function Neaterm:show_terminal(buf)
   if not buf or not self.terminals[buf] then return end
-  
+
   local term = self.terminals[buf]
   if not api.nvim_win_is_valid(term.window) then
     -- Recreate window if invalid
     term.window = utils.create_window(self.opts, { type = term.type }, buf)
   end
-  
+
   api.nvim_set_current_win(term.window)
   self.current_terminal = buf
   ui.update_bar(self)

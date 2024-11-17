@@ -56,9 +56,8 @@ local default_opts = {
   repl_configs = {
     python = {
       name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors=NoColor",
+      cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "%colors NoColor",
         "import sys",
         "sys.ps1 = 'In []: '",
         "sys.ps2 = '   ....: '",
@@ -66,6 +65,26 @@ local default_opts = {
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
       exit_cmd = "exit()",
+    },
+    r = {
+      name = "R Statistical Computing",
+      cmd = "R --no-save",
+      -- startup_cmds = {
+      --   "library(tidyverse)",
+      --   "library(ggplot2)",
+      -- },
+      get_variables_cmd = "ls()",
+      inspect_variable_cmd = "str(", -- Will be appended with ")"
+      exit_cmd = "q()",
+      parse_variables = function(output)
+        local vars = {}
+        for name in output:gmatch("[%w_]+") do
+          local type_cmd = string.format("class(%s)", name)
+          -- You might want to implement a way to get the actual type
+          vars[name] = { type = "unknown", size = "N/A" }
+        end
+        return vars
+      end
     },
     lua = {
       name = "Lua",
