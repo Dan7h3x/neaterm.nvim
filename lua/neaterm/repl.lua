@@ -33,113 +33,134 @@ local function save_history()
   end
 end
 
--- REPL configurations
-M.repl_configs = {
-  python = {
-    name = "Python (IPython)",
-    cmd = "ipython --no-autoindent --colors='Linux'",
-    startup_cmds = {
-      "import sys",
-      "sys.ps1 = 'In []: '",
-      "sys.ps2 = '   ....: '",
-    },
-    get_variables_cmd = "whos",
-    inspect_variable_cmd = "?",
-    exit_cmd = "exit()",
-  },
-  lua = {
-    name = "Lua",
-    cmd = "lua",
-    exit_cmd = "os.exit()",
-  },
-  node = {
-    name = "Node.js",
-    cmd = "node",
-    get_variables_cmd = "Object.keys(global)",
-    exit_cmd = ".exit",
-  },
-  r = {
-    name = "R",
-    cmd = "R",
-    get_variables_cmd = "ls()",
-    exit_cmd = "q()",
-  },
-}
-
-function M.show_repl_menu(neaterm)
-  local current_ft = vim.bo.filetype
-  local items = {}
-  
-  -- Add default REPL for current filetype if available
-  if M.repl_configs[current_ft] then
-    local config = M.repl_configs[current_ft]
-    table.insert(items, {
-      name = string.format("[Default] %s (Float)", config.name),
-      cmd = config.cmd,
-      type = "float"
-    })
-  end
-  
-  -- Add all available REPLs with different layouts
-  for ft, config in pairs(M.repl_configs) do
-    local layouts = {
-      { name = "Float", type = "float" },
-      { name = "Vertical", type = "vertical" },
-      { name = "Horizontal", type = "horizontal" }
+function M.safe_close_repl(neaterm)
+  if neaterm.current_repl then
+    local repl = neaterm.current_repl
+    -- Send exit command based on filetype
+    local exit_cmds = {
+      python = "exit()",
+      r = "q()",
+      julia = "exit()",
+      lua = "os.exit()",
+      node = ".exit",
     }
     
-    for _, layout in ipairs(layouts) do
-      table.insert(items, {
-        name = string.format("%s (%s)", config.name, layout.name),
-        cmd = config.cmd,
-        type = layout.type,
-        filetype = ft
-      })
+    if repl.buf and api.nvim_buf_is_valid(repl.buf) then
+      -- Send exit command if available
+      if exit_cmds[repl.filetype] then
+        neaterm:send_text(exit_cmds[repl.filetype])
+      end
+      
+      -- Wait briefly before closing
+      vim.defer_fn(function()
+        if api.nvim_buf_is_valid(repl.buf) then
+          neaterm:close_terminal(repl.buf)
+        end
+      end, 100)
     end
+    
+    neaterm.current_repl = nil
+  end
+end
+
+function M.start_repl(neaterm, opts)
+  -- Close existing REPL if any
+  M.safe_close_repl(neaterm)
+  
+  local term_opts = {
+    cmd = opts.cmd,
+    type = opts.type or 'float',
+    float_width = neaterm.opts.repl.float_width or 0.6,
+    float_height = neaterm.opts.repl.float_height or 0.4,
+  }
+  
+  local buf = neaterm:create_terminal(term_opts)
+  if not buf then return end
+  
+  neaterm.current_repl = {
+    buf = buf,
+    filetype = opts.filetype,
+    config = M.repl_configs[opts.filetype],
+    type = opts.type,
+  }
+  
+  -- Execute startup commands if available
+  if neaterm.current_repl.config and neaterm.current_repl.config.startup_cmds then
+    vim.defer_fn(function()
+      for _, cmd in ipairs(neaterm.current_repl.config.startup_cmds) do
+        neaterm:send_text(cmd)
+      end
+    end, 500)
   end
   
-  -- Show menu with fzf-lua
-  fzf.fzf_exec(
-    vim.tbl_map(function(item) return item.name end, items),
-    {
-      prompt = "Select REPL > ",
-      actions = {
-        ["default"] = function(selected)
-          local selection = selected[1]
-          for _, item in ipairs(items) do
-            if item.name == selection then
-              M.start_repl(neaterm, {
-                cmd = item.cmd,
-                type = item.type,
-                filetype = item.filetype or current_ft
-              })
-              break
-            end
-          end
-        end
-      },
-      previewer = false
-    }
-  )
+  -- Track active REPLs
+  M.active_repls[buf] = neaterm.current_repl
 end
 
--- ... rest of your existing functions ...
-
--- Add function to restart REPL
-function M.restart_repl(neaterm)
-  if neaterm.current_repl then
-    local current_config = {
-      cmd = neaterm.current_repl.config.cmd,
-      type = neaterm.current_repl.type,
-      filetype = neaterm.current_repl.filetype
-    }
-    M.safe_close_repl(neaterm)
-    vim.defer_fn(function()
-      M.start_repl(neaterm, current_config)
-    end, 100)
+function M.send_to_repl(neaterm, text)
+  if neaterm.current_repl and neaterm.current_repl.buf then
+    -- Add to history
+    add_to_history(text, neaterm.current_repl.filetype)
+    -- Send to REPL
+    neaterm:send_text(text)
   else
-    vim.notify("No active REPL to restart", vim.log.levels.WARN)
+    vim.notify("No active REPL found", vim.log.levels.WARN)
   end
 end
+
+function M.send_line(neaterm)
+  local line = api.nvim_get_current_line()
+  M.send_to_repl(neaterm, line)
+end
+
+function M.send_selection(neaterm)
+  local start_pos = fn.getpos("'<")
+  local end_pos = fn.getpos("'>")
+  local lines = api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+  if #lines > 0 then
+    if start_pos[2] == end_pos[2] then
+      lines[1] = lines[1]:sub(start_pos[3], end_pos[3])
+    else
+      lines[1] = lines[1]:sub(start_pos[3])
+      lines[#lines] = lines[#lines]:sub(1, end_pos[3])
+    end
+    M.send_to_repl(neaterm, table.concat(lines, "\n"))
+  end
+end
+
+function M.send_buffer(neaterm)
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  M.send_to_repl(neaterm, table.concat(lines, "\n"))
+end
+
+function M.clear_repl(neaterm)
+  if neaterm.current_repl then
+    neaterm:send_text("\x0c") -- Send Ctrl-L to clear screen
+  end
+end
+
+-- Add function to add to history
+local function add_to_history(cmd, filetype)
+  if not M.history[filetype] then
+    M.history[filetype] = {}
+  end
+  -- Remove duplicate if exists
+  for i, item in ipairs(M.history[filetype]) do
+    if item == cmd then
+      table.remove(M.history[filetype], i)
+      break
+    end
+  end
+  -- Add to start of history
+  table.insert(M.history[filetype], 1, cmd)
+  -- Limit history size
+  while #M.history[filetype] > 100 do
+    table.remove(M.history[filetype])
+  end
+  save_history()
+end
+
+-- Make load_history available externally
+M.load_history = load_history
 
 return M

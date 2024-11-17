@@ -11,6 +11,9 @@ function M.setup(user_opts)
   -- Add REPL-specific keymappings
   local repl = require('neaterm.repl')
   
+  -- Load REPL history
+  repl.load_history()
+  
   -- Normal mode mappings
   vim.keymap.set('n', opts.keymaps.repl_toggle, function() 
     repl.show_repl_menu(neaterm) 
