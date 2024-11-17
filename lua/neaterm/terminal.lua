@@ -99,15 +99,19 @@ function Neaterm:create_terminal(opts)
       if code == 0 then
         vim.schedule(function()
           if api.nvim_buf_is_valid(buf) then
-            -- Clear buffer content
-            api.nvim_buf_set_lines(buf, 0, -1, false, {})
             -- Close window if it exists
             if api.nvim_win_is_valid(win) then
               api.nvim_win_close(win, true)
             end
-            -- Delete buffer
-            api.nvim_buf_delete(buf, { force = true })
+            -- Delete buffer without trying to modify it
+            pcall(api.nvim_buf_delete, buf, { force = true })
           end
+          -- Clean up terminal entry
+          self.terminals[buf] = nil
+          if self.current_terminal == buf then
+            self.current_terminal = nil
+          end
+          ui.update_bar(self)
         end)
       end
     end
@@ -456,15 +460,29 @@ end
 
 -- Cleanup Methods
 function Neaterm:cleanup_terminal(buf)
-  if self.terminals[buf] then
-    self.terminals[buf] = nil
-    if buf == self.current_terminal then
-      self.current_terminal = nil
-    end
-    if self.current_repl and self.current_repl.buf == buf then
-      self.current_repl = nil
-    end
+  if not buf or not self.terminals[buf] then return end
+  
+  local term = self.terminals[buf]
+  
+  -- Close window if it exists
+  if term.window and api.nvim_win_is_valid(term.window) then
+    pcall(api.nvim_win_close, term.window, true)
   end
+  
+  -- Delete buffer if it exists
+  if api.nvim_buf_is_valid(buf) then
+    pcall(api.nvim_buf_delete, buf, { force = true })
+  end
+  
+  -- Clean up references
+  self.terminals[buf] = nil
+  if self.current_terminal == buf then
+    self.current_terminal = nil
+  end
+  if self.current_repl and self.current_repl.buf == buf then
+    self.current_repl = nil
+  end
+  
   ui.update_bar(self)
 end
 
@@ -496,7 +514,7 @@ function Neaterm:safe_close_repl()
         end
       end
       
-      -- Delete buffer
+      -- Delete buffer directly without modification
       pcall(api.nvim_buf_delete, repl.buf, { force = true })
       
       -- Clean up terminal entry
@@ -505,6 +523,7 @@ function Neaterm:safe_close_repl()
     
     -- Clear current REPL
     self.current_repl = nil
+    ui.update_bar(self)
   end, 100)
 end
 
@@ -829,6 +848,21 @@ function Neaterm:parse_repl_output(output, filetype)
   
   -- Use default parser for the language if available
   return (parsers[filetype] or function() return {} end)(output)
+end
+
+-- Add this helper function to safely close windows and buffers
+function Neaterm:safe_close_terminal(buf)
+  if not buf or not self.terminals[buf] then return end
+  
+  local term = self.terminals[buf]
+  if term.job_id then
+    -- Try to terminate the job gracefully
+    pcall(vim.fn.jobstop, term.job_id)
+  end
+  
+  vim.defer_fn(function()
+    self:cleanup_terminal(buf)
+  end, 50)
 end
 
 return Neaterm
