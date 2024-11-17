@@ -205,11 +205,13 @@ end
 
 -- REPL Configuration Methods
 function Neaterm:setup_repl_configs()
+  -- Start with built-in configs
   self.repl_configs = {
     python = {
       name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors='Linux'",
+      cmd = "ipython --no-autoindent --colors=NoColor",
       startup_cmds = {
+        "%colors NoColor",
         "import sys",
         "sys.ps1 = 'In []: '",
         "sys.ps2 = '   ....: '",
@@ -228,13 +230,20 @@ function Neaterm:setup_repl_configs()
         return vars
       end
     },
-    lua = {
-      name = "Lua",
-      cmd = "lua",
-      exit_cmd = "os.exit()",
-    },
-    -- Add more REPL configurations here
   }
+
+  -- Merge with user configs from opts
+  if self.opts.repl_configs then
+    for lang, config in pairs(self.opts.repl_configs) do
+      if self.repl_configs[lang] then
+        -- Merge with existing config
+        self.repl_configs[lang] = vim.tbl_deep_extend("force", self.repl_configs[lang], config)
+      else
+        -- Add new config
+        self.repl_configs[lang] = config
+      end
+    end
+  end
 end
 
 function Neaterm:get_repl_menu_items(filetype)

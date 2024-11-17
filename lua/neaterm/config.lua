@@ -53,6 +53,32 @@ local default_opts = {
     max_history = 100,
     update_interval = 5000, -- Update variables every 5 seconds
   },
+  repl_configs = {
+    python = {
+      name = "Python (IPython)",
+      cmd = "ipython --no-autoindent --colors=NoColor",
+      startup_cmds = {
+        "%colors NoColor",
+        "import sys",
+        "sys.ps1 = 'In []: '",
+        "sys.ps2 = '   ....: '",
+      },
+      get_variables_cmd = "whos",
+      inspect_variable_cmd = "?",
+      exit_cmd = "exit()",
+    },
+    lua = {
+      name = "Lua",
+      cmd = "lua",
+      exit_cmd = "os.exit()",
+    },
+    node = {
+      name = "Node.js",
+      cmd = "node",
+      get_variables_cmd = "Object.keys(global)",
+      exit_cmd = ".exit",
+    },
+  },
 }
 
 function M.setup(user_opts)
