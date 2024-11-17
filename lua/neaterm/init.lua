@@ -9,16 +9,29 @@ function M.setup(user_opts)
   neaterm:setup()
 
   -- Add REPL-specific keymappings
-  vim.keymap.set('n', '<leader>rt', function() 
-    require('neaterm.repl').show_repl_menu(neaterm) 
+  local repl = require('neaterm.repl')
+  
+  -- Normal mode mappings
+  vim.keymap.set('n', opts.keymaps.repl_toggle, function() 
+    repl.show_repl_menu(neaterm) 
   end, { desc = "Toggle REPL menu" })
-  vim.keymap.set('n', '<leader>rr', function() require('neaterm.repl').create_repl(neaterm) end)
-  vim.keymap.set('n', '<leader>rc', function() require('neaterm.repl').close_repl(neaterm) end)
-  vim.keymap.set('n', '<leader>rl', function() require('neaterm.repl').send_line(neaterm) end)
-  vim.keymap.set('v', '<leader>rs', function() require('neaterm.repl').send_selection(neaterm) end)
-  vim.keymap.set('n', '<leader>rb', function() require('neaterm.repl').send_buffer(neaterm) end)
-  vim.keymap.set('n', '<leader>rh', function() require('neaterm.repl').show_history(neaterm) end)
-  vim.keymap.set('n', '<leader>rv', function() require('neaterm.repl').show_variables(neaterm) end)
+  
+  vim.keymap.set('n', opts.keymaps.repl_send_line, function()
+    repl.send_line(neaterm)
+  end, { desc = "Send line to REPL" })
+  
+  vim.keymap.set('n', opts.keymaps.repl_send_buffer, function()
+    repl.send_buffer(neaterm)
+  end, { desc = "Send buffer to REPL" })
+  
+  vim.keymap.set('n', opts.keymaps.repl_clear, function()
+    repl.clear_repl(neaterm)
+  end, { desc = "Clear REPL" })
+  
+  -- Visual mode mapping
+  vim.keymap.set('v', opts.keymaps.repl_send_selection, function()
+    repl.send_selection(neaterm)
+  end, { desc = "Send selection to REPL" })
 
   return neaterm
 end

@@ -4,6 +4,9 @@ local fzf = require('fzf-lua')
 
 local M = {}
 
+-- Add REPL state management
+M.active_repls = {}
+
 -- REPL configurations for different languages
 M.repl_configs = {
   python = {
@@ -34,6 +37,35 @@ M.repl_configs = {
   },
   -- Add more REPLs here
 }
+
+function M.safe_close_repl(neaterm)
+  if neaterm.current_repl then
+    local repl = neaterm.current_repl
+    -- Send exit command based on filetype
+    local exit_cmds = {
+      python = "exit()",
+      r = "q()",
+      julia = "exit()",
+      lua = "os.exit()",
+    }
+    
+    if repl.buf and api.nvim_buf_is_valid(repl.buf) then
+      -- Send exit command if available
+      if exit_cmds[repl.filetype] then
+        neaterm:send_text(exit_cmds[repl.filetype])
+      end
+      
+      -- Wait briefly before closing
+      vim.defer_fn(function()
+        if api.nvim_buf_is_valid(repl.buf) then
+          neaterm:close_terminal(repl.buf)
+        end
+      end, 100)
+    end
+    
+    neaterm.current_repl = nil
+  end
+end
 
 function M.show_repl_menu(neaterm)
   local current_ft = vim.bo.filetype
@@ -101,8 +133,8 @@ function M.start_repl(neaterm, opts)
   local term_opts = {
     cmd = opts.cmd,
     type = opts.type or 'float',
-    float_width = neaterm.opts.float_width,
-    float_height = neaterm.opts.float_height,
+    float_width = neaterm.opts.repl.float_width or 0.6,
+    float_height = neaterm.opts.repl.float_height or 0.4,
   }
   
   local buf = neaterm:create_terminal(term_opts)
@@ -112,6 +144,7 @@ function M.start_repl(neaterm, opts)
     buf = buf,
     filetype = opts.filetype,
     config = M.repl_configs[opts.filetype],
+    type = opts.type,
   }
   
   -- Execute startup commands if available
@@ -121,6 +154,54 @@ function M.start_repl(neaterm, opts)
         neaterm:send_text(cmd)
       end
     end, 500)
+  end
+  
+  -- Track active REPLs
+  M.active_repls[buf] = neaterm.current_repl
+end
+
+-- Add function to send text to REPL
+function M.send_to_repl(neaterm, text)
+  if neaterm.current_repl and neaterm.current_repl.buf then
+    neaterm:send_text(text)
+  else
+    vim.notify("No active REPL found", vim.log.levels.WARN)
+  end
+end
+
+-- Add function to send current line
+function M.send_line(neaterm)
+  local line = api.nvim_get_current_line()
+  M.send_to_repl(neaterm, line)
+end
+
+-- Add function to send visual selection
+function M.send_selection(neaterm)
+  local start_pos = fn.getpos("'<")
+  local end_pos = fn.getpos("'>")
+  local lines = api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+  if #lines > 0 then
+    -- Adjust last line to respect visual selection
+    if start_pos[2] == end_pos[2] then
+      lines[1] = lines[1]:sub(start_pos[3], end_pos[3])
+    else
+      lines[1] = lines[1]:sub(start_pos[3])
+      lines[#lines] = lines[#lines]:sub(1, end_pos[3])
+    end
+    M.send_to_repl(neaterm, table.concat(lines, "\n"))
+  end
+end
+
+-- Add function to send entire buffer
+function M.send_buffer(neaterm)
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  M.send_to_repl(neaterm, table.concat(lines, "\n"))
+end
+
+-- Add function to clear REPL
+function M.clear_repl(neaterm)
+  if neaterm.current_repl then
+    neaterm:send_text("\x0c") -- Send Ctrl-L to clear screen
   end
 end
 
