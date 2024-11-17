@@ -40,6 +40,9 @@ local default_opts = {
     repl_send_selection = '<leader>rs',
     repl_send_buffer = '<leader>rb',
     repl_clear = '<leader>rc',
+    repl_history = '<leader>rh',
+    repl_variables = '<leader>rv',
+    repl_restart = '<leader>rR',
   },
   repl = {
     float_width = 0.6,
@@ -47,6 +50,8 @@ local default_opts = {
     auto_close = true,
     save_history = true,
     history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
+    max_history = 100,
+    update_interval = 5000, -- Update variables every 5 seconds
   },
 }
 
