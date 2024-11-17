@@ -90,32 +90,48 @@ function Neaterm:create_terminal(opts)
   local buf = api.nvim_create_buf(false, true)
   
   -- Set buffer options
-  api.nvim_set_option_value('filetype', 'neaterm', { buf = buf })
+  api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
+  api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
+  api.nvim_buf_set_option(buf, 'buflisted', false)
   
   local win = utils.create_window(self.opts, opts, buf)
   local term_id = fn.termopen(opts.cmd or self.opts.shell, {
     on_exit = function(_, code)
-      -- Suppress exit message and cleanup silently
-      if code == 0 then
-        vim.schedule(function()
-          if api.nvim_buf_is_valid(buf) then
-            -- Close window if it exists
-            if api.nvim_win_is_valid(win) then
-              api.nvim_win_close(win, true)
-            end
-            -- Delete buffer without trying to modify it
-            pcall(api.nvim_buf_delete, buf, { force = true })
-          end
-          -- Clean up terminal entry
+      vim.schedule(function()
+        -- Only handle cleanup if the buffer still exists
+        if api.nvim_buf_is_valid(buf) then
+          -- Remove from terminals table first
           self.terminals[buf] = nil
+          
+          -- Update current terminal/repl references
           if self.current_terminal == buf then
             self.current_terminal = nil
           end
-          ui.update_bar(self)
-        end)
-      end
+          if self.current_repl and self.current_repl.buf == buf then
+            self.current_repl = nil
+          end
+          
+          -- Close window if it exists and is valid
+          if win and api.nvim_win_is_valid(win) then
+            pcall(api.nvim_win_close, win, true)
+          end
+          
+          -- Delete buffer last
+          pcall(api.nvim_buf_delete, buf, { force = true })
+        end
+        
+        -- Update UI
+        ui.update_bar(self)
+      end)
     end
   })
+  
+  if term_id <= 0 then
+    -- Terminal creation failed
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.notify("Failed to create terminal", vim.log.levels.ERROR)
+    return nil
+  end
   
   self.terminals[buf] = {
     window = win,
