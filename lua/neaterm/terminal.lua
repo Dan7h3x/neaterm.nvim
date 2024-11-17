@@ -33,26 +33,55 @@ function Neaterm:setup_repl()
 end
 
 function Neaterm:setup_keymaps()
-  -- Terminal keymaps
-  local keymap_opts = { noremap = true, silent = true }
+  local opts = { noremap = true, silent = true }
   
   -- Terminal management
-  vim.keymap.set({'n', 't'}, self.opts.keymaps.toggle, function()
-    self:toggle_terminal()
-  end, keymap_opts)
+  local maps = {
+    -- Basic terminal operations
+    [self.opts.keymaps.toggle] = function() self:toggle_terminal() end,
+    [self.opts.keymaps.new_vertical] = function() self:create_terminal({ type = 'vertical' }) end,
+    [self.opts.keymaps.new_horizontal] = function() self:create_terminal({ type = 'horizontal' }) end,
+    [self.opts.keymaps.new_float] = function() self:create_terminal({ type = 'float' }) end,
+    [self.opts.keymaps.close] = function() self:close_current_terminal() end,
+    
+    -- Terminal navigation
+    [self.opts.keymaps.next] = function() self:next_terminal() end,
+    [self.opts.keymaps.prev] = function() self:prev_terminal() end,
+    
+    -- Terminal movement
+    [self.opts.keymaps.move_up] = function() self:move_terminal('up') end,
+    [self.opts.keymaps.move_down] = function() self:move_terminal('down') end,
+    [self.opts.keymaps.move_left] = function() self:move_terminal('left') end,
+    [self.opts.keymaps.move_right] = function() self:move_terminal('right') end,
+    
+    -- Terminal resizing
+    [self.opts.keymaps.resize_up] = function() self:resize_terminal('up') end,
+    [self.opts.keymaps.resize_down] = function() self:resize_terminal('down') end,
+    [self.opts.keymaps.resize_left] = function() self:resize_terminal('left') end,
+    [self.opts.keymaps.resize_right] = function() self:resize_terminal('right') end,
+    
+    -- REPL operations
+    [self.opts.keymaps.repl_toggle] = function() self:show_repl_menu() end,
+    [self.opts.keymaps.repl_send_line] = function() self:send_line_to_repl() end,
+    [self.opts.keymaps.repl_send_buffer] = function() self:send_buffer_to_repl() end,
+    [self.opts.keymaps.repl_clear] = function() self:clear_repl() end,
+    [self.opts.keymaps.repl_history] = function() self:show_history() end,
+    [self.opts.keymaps.repl_variables] = function() self:show_variables() end,
+    [self.opts.keymaps.repl_restart] = function() self:restart_repl() end,
+    
+    -- Bar operations
+    [self.opts.keymaps.focus_bar] = function() self:focus_bar() end,
+  }
   
-  -- REPL keymaps
-  vim.keymap.set('n', self.opts.keymaps.repl_toggle, function()
-    self:show_repl_menu()
-  end, keymap_opts)
+  -- Set normal mode mappings
+  for key, func in pairs(maps) do
+    vim.keymap.set('n', key, func, opts)
+  end
   
-  vim.keymap.set('n', self.opts.keymaps.repl_send_line, function()
-    self:send_line_to_repl()
-  end, keymap_opts)
-  
+  -- Set visual mode mapping for REPL selection
   vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
     self:send_selection_to_repl()
-  end, keymap_opts)
+  end, opts)
 end
 
 -- Terminal Management Methods
@@ -173,16 +202,14 @@ function Neaterm:send_line_to_repl()
   self:send_text(line)
 end
 
--- ... continuing from previous terminal.lua ...
 
 -- REPL Configuration Methods
 function Neaterm:setup_repl_configs()
   self.repl_configs = {
     python = {
       name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors=NoColor",
+      cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "%colors NoColor",
         "import sys",
         "sys.ps1 = 'In []: '",
         "sys.ps2 = '   ....: '",
@@ -355,6 +382,121 @@ function Neaterm:safe_close_repl()
       end
     end, 100)
   end
+end
+
+-- Add this method to the Neaterm class
+function Neaterm:setup_terminal_settings(win, buf)
+  -- Window-specific settings
+  local win_opts = {
+    number = false,
+    relativenumber = false,
+    signcolumn = "no",
+    wrap = false,
+  }
+  
+  for opt, value in pairs(win_opts) do
+    api.nvim_win_set_option(win, opt, value)
+  end
+  
+  -- Buffer-specific settings
+  local buf_opts = {
+    bufhidden = "hide",
+    filetype = "neaterm",
+    buflisted = false,
+  }
+  
+  for opt, value in pairs(buf_opts) do
+    api.nvim_buf_set_option(buf, opt, value)
+  end
+  
+  -- Terminal-specific keymaps
+  local term_maps = {
+    ['<C-\\><C-n>'] = '<Cmd>startinsert<CR>',
+    ['<C-h>'] = '<Cmd>wincmd h<CR>',
+    ['<C-j>'] = '<Cmd>wincmd j<CR>',
+    ['<C-k>'] = '<Cmd>wincmd k<CR>',
+    ['<C-l>'] = '<Cmd>wincmd l<CR>',
+  }
+  
+  for lhs, rhs in pairs(term_maps) do
+    vim.keymap.set('t', lhs, rhs, { buffer = buf, silent = true })
+  end
+  
+  -- Auto-enter insert mode when focusing terminal
+  api.nvim_create_autocmd("BufEnter", {
+    buffer = buf,
+    callback = function()
+      vim.cmd('startinsert')
+    end
+  })
+end
+
+-- Add navigation methods
+function Neaterm:next_terminal()
+  local terminals = vim.tbl_keys(self.terminals)
+  if #terminals == 0 then return end
+  
+  local current_index = 1
+  for i, buf in ipairs(terminals) do
+    if buf == self.current_terminal then
+      current_index = i
+      break
+    end
+  end
+  
+  local next_index = current_index % #terminals + 1
+  self:show_terminal(terminals[next_index])
+end
+
+function Neaterm:prev_terminal()
+  local terminals = vim.tbl_keys(self.terminals)
+  if #terminals == 0 then return end
+  
+  local current_index = 1
+  for i, buf in ipairs(terminals) do
+    if buf == self.current_terminal then
+      current_index = i
+      break
+    end
+  end
+  
+  local prev_index = (current_index - 2) % #terminals + 1
+  self:show_terminal(terminals[prev_index])
+end
+
+-- Add movement and resize methods
+function Neaterm:move_terminal(direction)
+  if not self.current_terminal then return end
+  
+  local win = self.terminals[self.current_terminal].window
+  if not api.nvim_win_is_valid(win) then return end
+  
+  local amount = self.opts.move_amount or 3
+  local cmd = {
+    up = string.format('move -%d', amount),
+    down = string.format('move +%d', amount),
+    left = string.format('vertical resize -%d', amount),
+    right = string.format('vertical resize +%d', amount),
+  }
+  
+  vim.cmd(cmd[direction])
+end
+
+function Neaterm:resize_terminal(direction)
+  if not self.current_terminal then return end
+  
+  local win = self.terminals[self.current_terminal].window
+  if not api.nvim_win_is_valid(win) then return end
+  
+  local amount = self.opts.resize_amount or 2
+  local cmd = {
+    up = string.format('resize +%d', amount),
+    down = string.format('resize -%d', amount),
+    left = string.format('vertical resize -%d', amount),
+    right = string.format('vertical resize +%d', amount),
+  }
+  
+  vim.cmd(cmd[direction])
 end
 
 
