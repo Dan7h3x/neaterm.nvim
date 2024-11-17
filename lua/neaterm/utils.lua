@@ -1,6 +1,7 @@
-local M = {}
 local api = vim.api
-local ui = require("neaterm.ui")
+
+local M = {}
+
 function M.create_window(opts, term_opts, buf)
   local win_opts = {
     style = 'minimal',
@@ -9,8 +10,8 @@ function M.create_window(opts, term_opts, buf)
 
   if term_opts.type == 'float' then
     win_opts.relative = 'editor'
-    win_opts.width = math.floor(vim.o.columns * opts.float_width)
-    win_opts.height = math.floor(vim.o.lines * opts.float_height)
+    win_opts.width = math.floor(vim.o.columns * (term_opts.float_width or opts.float_width))
+    win_opts.height = math.floor(vim.o.lines * (term_opts.float_height or opts.float_height))
     win_opts.row = vim.o.lines - win_opts.height - 4
     win_opts.col = math.floor((vim.o.columns - win_opts.width) / 2)
     return api.nvim_open_win(buf, true, win_opts)
@@ -28,40 +29,55 @@ function M.create_window(opts, term_opts, buf)
 end
 
 function M.create_user_commands(neaterm)
-  local function create_command(name, callback)
-    api.nvim_create_user_command(name, function(opts)
-      callback(opts.args)
-    end, { nargs = '*' })
-  end
-
-  create_command('NeatermVertical', function(args) neaterm:create_terminal_with_cmd({ type = 'vertical' }, args) end)
-  create_command('NeatermHorizontal', function(args) neaterm:create_terminal_with_cmd({ type = 'horizontal' }, args) end)
-  create_command('NeatermFloat', function(args) neaterm:create_terminal_with_cmd({ type = 'float' }, args) end)
-  create_command('NeatermFull', function(args) neaterm:create_terminal_with_cmd({ type = 'full' }, args) end)
-  create_command('NeatermToggle', function() neaterm:toggle_terminal() end)
-  create_command('NeatermNext', function() neaterm:next_terminal() end)
-  create_command('NeatermPrev', function() neaterm:prev_terminal() end)
-  create_command('NeatermFocusBar', function() ui.focus_bar(neaterm) end)
-end
-
-function M.setup_global_keymaps(opts)
-  local keymap_opts = { noremap = true, silent = true }
-  local keymaps = {
-    { { 'n', 't' }, opts.keymaps.toggle,         '<CMD>NeatermToggle<CR>' },
-    { { 'n', 't' }, opts.keymaps.new_vertical,   '<CMD>NeatermVertical<CR>' },
-    { { 'n', 't' }, opts.keymaps.new_horizontal, '<CMD>NeatermHorizontal<CR>' },
-    { { 'n', 't' }, opts.keymaps.new_float,      '<CMD>NeatermFloat<CR>' },
-    { { 'n', 't' }, opts.keymaps.next,           '<CMD>NeatermNext<CR>' },
-    { { 'n', 't' }, opts.keymaps.prev,           '<CMD>NeatermPrev<CR>' },
-    { { 'n', 't' }, opts.keymaps.focus_bar,      '<CMD>NeatermFocusBar<CR>' },
+  local commands = {
+    NeatermVertical = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'vertical', cmd = opts.args })
+      end
+    },
+    NeatermHorizontal = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'horizontal', cmd = opts.args })
+      end
+    },
+    NeatermFloat = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'float', cmd = opts.args })
+      end
+    },
+    NeatermFull = {
+      callback = function(opts)
+        neaterm:create_terminal({ type = 'full', cmd = opts.args })
+      end
+    },
+    NeatermToggle = {
+      callback = function()
+        neaterm:toggle_terminal()
+      end
+    },
+    NeatermREPL = {
+      callback = function()
+        neaterm:show_repl_menu()
+      end
+    },
+    NeatermHistory = {
+      callback = function()
+        neaterm:show_history()
+      end
+    },
+    NeatermVariables = {
+      callback = function()
+        neaterm:show_variables()
+      end
+    },
   }
-  for _, map in ipairs(keymaps) do
-    vim.keymap.set(map[1], map[2], map[3], keymap_opts)
+
+  for name, cmd in pairs(commands) do
+    api.nvim_create_user_command(name, cmd.callback, { nargs = '*' })
   end
 end
 
 function M.setup_filetype_detection()
-  -- Set up filetype detection
   api.nvim_create_autocmd("FileType", {
     pattern = "neaterm",
     callback = function()
@@ -70,14 +86,17 @@ function M.setup_filetype_detection()
       opts.relativenumber = false
       opts.signcolumn = "no"
       opts.bufhidden = "hide"
+      opts.wrap = false
     end
   })
 end
 
 function M.setup_vimleave_autocmd(neaterm)
-  -- Automatically clear untitled buffers on VimLeave
   api.nvim_create_autocmd("VimLeave", {
     callback = function()
+      -- Save REPL history before exit
+      neaterm:save_repl_history()
+      -- Clean up terminals
       for buf, _ in pairs(neaterm.terminals) do
         if api.nvim_buf_is_valid(buf) then
           api.nvim_buf_delete(buf, { force = true })
@@ -87,13 +106,21 @@ function M.setup_vimleave_autocmd(neaterm)
   })
 end
 
-function M.tbl_index(tbl, value)
-  for i, v in ipairs(tbl) do
-    if v == value then
-      return i
-    end
+function M.get_visual_selection()
+  local start_pos = vim.fn.getpos("'<")
+  local end_pos = vim.fn.getpos("'>")
+  local lines = api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+
+  if #lines == 0 then return "" end
+
+  if #lines == 1 then
+    lines[1] = lines[1]:sub(start_pos[3], end_pos[3])
+  else
+    lines[1] = lines[1]:sub(start_pos[3])
+    lines[#lines] = lines[#lines]:sub(1, end_pos[3])
   end
-  return nil
+
+  return table.concat(lines, "\n")
 end
 
 return M
