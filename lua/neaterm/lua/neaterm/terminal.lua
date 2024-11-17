@@ -302,4 +302,10 @@ function Neaterm:move_float(direction)
   api.nvim_win_set_config(win, config)
 end
 
+function Neaterm:send_text(text)
+  if self.terminals[self.current_terminal] then
+    api.nvim_chan_send(self.terminals[self.current_terminal].job_id, text)
+  end
+end
+
 return Neaterm
