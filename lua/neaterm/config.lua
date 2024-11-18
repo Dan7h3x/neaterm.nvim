@@ -35,19 +35,53 @@ local default_opts = {
       key = '<C-A-t>',
       desc = 'Create new floating terminal'
     },
-    close = '<C-d>',
-    next = '<C-PageDown>',
-    prev = '<C-PageUp>',
-    move_up = '<C-A-Up>',
-    move_down = '<C-A-Down>',
-    move_left = '<C-A-Left>',
-    move_right = '<C-A-Right>',
-    resize_up = '<C-S-Up>',
-    resize_down = '<C-S-Down>',
-    resize_left = '<C-S-Left>',
-    resize_right = '<C-S-Right>',
+    close = {
+      key = '<C-d>',
+      desc = 'Close current terminal'
+    },
+    next = {
+      key = '<C-PageDown>',
+      desc = 'Go to next terminal'
+    },
+    prev = {
+      key = '<C-PageUp>',
+      desc = 'Go to previous terminal'
+    },
+    move_up = {
+      key = '<C-A-Up>',
+      desc = 'Move terminal window up'
+    },
+    move_down = {
+      key = '<C-A-Down>',
+      desc = 'Move terminal window down'
+    },
+    move_left = {
+      key = '<C-A-Left>',
+      desc = 'Move terminal window left'
+    },
+    move_right = {
+      key = '<C-A-Right>',
+      desc = 'Move terminal window right'
+    },
+    resize_up = {
+      key = '<C-S-Up>',
+      desc = 'Decrease terminal height'
+    },
+    resize_down = {
+      key = '<C-S-Down>',
+      desc = 'Increase terminal height'
+    },
+    resize_left = {
+      key = '<C-S-Left>',
+      desc = 'Decrease terminal width'
+    },
+    resize_right = {
+      key = '<C-S-Right>',
+      desc = 'Increase terminal width'
+    },
     focus_bar = '<C-A-b>',
-    repl_toggle = '<leader>rt',
+    repl_toggle = { key = '<leader>rt',
+  desc = 'Toggle REPL'},
     repl_send_line = '<leader>rl',
     repl_send_selection = '<leader>rs',
     repl_send_buffer = '<leader>rb',
@@ -55,6 +89,10 @@ local default_opts = {
     repl_history = '<leader>rh',
     repl_variables = '<leader>rv',
     repl_restart = '<leader>rR',
+    terminal_picker = {
+      key = '<leader>tp',
+      desc = 'Show terminal picker'
+    },
   },
   repl = {
     float_width = 0.6,
@@ -80,11 +118,11 @@ local default_opts = {
     },
     r = {
       name = "R (Radian)",
-      cmd = "radian",
-      startup_cmds = {
-        "options(width = 80)",
-        "options(prompt = 'R> ')",
-      },
+      cmd = "R --no-save",
+      -- startup_cmds = {
+      --   "options(width = 80)",
+      --   "options(prompt = 'R> ')",
+      -- },
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
       exit_cmd = "q(save='no')",

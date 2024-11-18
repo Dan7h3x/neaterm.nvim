@@ -681,6 +681,10 @@ function Neaterm:setup_terminal_settings(win, buf)
 
   -- Terminal-specific keymaps with descriptions
   local term_maps = {
+    ['<ESC><ESC>'] = {
+      cmd = '<C-\\><C-n>',
+      desc = 'Exit terminal insert mode'
+    },
     ['<C-\\><C-n>'] = {
       cmd = '<Cmd>startinsert<CR>',
       desc = 'Enter terminal insert mode'
@@ -701,6 +705,10 @@ function Neaterm:setup_terminal_settings(win, buf)
       cmd = '<Cmd>wincmd l<CR>',
       desc = 'Move to right window'
     },
+    ['<C-w>'] = {
+      cmd = '<C-\\><C-n><C-w>',
+      desc = 'Window command prefix'
+    }
   }
 
   for lhs, map in pairs(term_maps) do
@@ -711,14 +719,23 @@ function Neaterm:setup_terminal_settings(win, buf)
     })
   end
 
-  -- Auto-enter insert mode when focusing terminal
-  api.nvim_create_autocmd("BufEnter", {
+  -- Add new features
+  -- Auto-resize on terminal window focus
+  api.nvim_create_autocmd("WinEnter", {
     buffer = buf,
     callback = function()
-      vim.cmd('startinsert')
+      if vim.bo[buf].buftype == 'terminal' then
+        vim.cmd('startinsert')
+      end
     end,
     desc = "Auto-enter insert mode in terminal"
   })
+
+  -- Add terminal title
+  if term.cmd then
+    local title = term.cmd:match("([^/]+)$") or "terminal"
+    api.nvim_buf_set_name(buf, string.format("term://%s", title))
+  end
 end
 
 -- Add navigation methods
@@ -756,37 +773,57 @@ end
 
 -- Add movement and resize methods
 function Neaterm:move_terminal(direction)
-  if not self.current_terminal then return end
-
-  local win = self.terminals[self.current_terminal].window
-  if not api.nvim_win_is_valid(win) then return end
-
-  local amount = self.opts.move_amount or 3
-  local cmd = {
-    up = string.format('move -%d', amount),
-    down = string.format('move +%d', amount),
-    left = string.format('vertical resize -%d', amount),
-    right = string.format('vertical resize +%d', amount),
-  }
-
-  vim.cmd(cmd[direction])
+  local term = self.terminals[self.current_terminal]
+  if not term or not term.window then return end
+  
+  local win = term.window
+  local config = api.nvim_win_get_config(win)
+  
+  if config.relative == 'editor' then -- Floating window
+    local changes = {
+      up = { row = -self.opts.move_amount },
+      down = { row = self.opts.move_amount },
+      left = { col = -self.opts.move_amount },
+      right = { col = self.opts.move_amount }
+    }
+    
+    self:update_float_position(win, changes[direction] or {})
+  else -- Regular window
+    local directions = {
+      up = 'K',
+      down = 'J',
+      left = 'H',
+      right = 'L'
+    }
+    vim.cmd('wincmd ' .. directions[direction])
+  end
 end
 
 function Neaterm:resize_terminal(direction)
-  if not self.current_terminal then return end
-
-  local win = self.terminals[self.current_terminal].window
-  if not api.nvim_win_is_valid(win) then return end
-
-  local amount = self.opts.resize_amount or 2
-  local cmd = {
-    up = string.format('resize +%d', amount),
-    down = string.format('resize -%d', amount),
-    left = string.format('vertical resize -%d', amount),
-    right = string.format('vertical resize +%d', amount),
-  }
-
-  vim.cmd(cmd[direction])
+  local term = self.terminals[self.current_terminal]
+  if not term or not term.window then return end
+  
+  local win = term.window
+  local config = api.nvim_win_get_config(win)
+  
+  if config.relative == 'editor' then -- Floating window
+    local changes = {
+      up = { height = -self.opts.resize_amount },
+      down = { height = self.opts.resize_amount },
+      left = { width = -self.opts.resize_amount },
+      right = { width = self.opts.resize_amount }
+    }
+    
+    self:update_float_position(win, changes[direction] or {})
+  else -- Regular window
+    local cmd = {
+      up = 'resize -' .. self.opts.resize_amount,
+      down = 'resize +' .. self.opts.resize_amount,
+      left = 'vertical resize -' .. self.opts.resize_amount,
+      right = 'vertical resize +' .. self.opts.resize_amount
+    }
+    vim.cmd(cmd[direction])
+  end
 end
 
 -- Add these methods to the Neaterm class
@@ -1010,6 +1047,98 @@ function Neaterm:safe_close_terminal(buf)
   vim.defer_fn(function()
     self:cleanup_terminal(buf)
   end, 50)
+end
+
+-- Add these helper functions for floating window management
+function Neaterm:get_window_bounds(win)
+  local config = api.nvim_win_get_config(win)
+  return {
+    row = config.row[false],
+    col = config.col[false],
+    width = config.width,
+    height = config.height,
+    relative = config.relative
+  }
+end
+
+function Neaterm:update_float_position(win, changes)
+  if not win or not api.nvim_win_is_valid(win) then return end
+  
+  local bounds = self:get_window_bounds(win)
+  if bounds.relative ~= 'editor' then return end
+  
+  -- Calculate new position with bounds checking
+  local new_config = {
+    relative = 'editor',
+    row = math.max(0, math.min(bounds.row + (changes.row or 0), vim.o.lines - bounds.height - 2)),
+    col = math.max(0, math.min(bounds.col + (changes.col or 0), vim.o.columns - bounds.width - 2)),
+    width = math.max(20, math.min(bounds.width + (changes.width or 0), vim.o.columns - 4)),
+    height = math.max(3, math.min(bounds.height + (changes.height or 0), vim.o.lines - 4))
+  }
+  
+  api.nvim_win_set_config(win, new_config)
+end
+
+-- Add new features
+function Neaterm:setup_features()
+  -- Terminal status line
+  vim.opt.statusline = [[%{b:term_title}%=%{get(b:,'term_status','')}]]
+  
+  -- Terminal completion
+  vim.opt.complete:append('t')
+  
+  -- Add terminal picker
+  function self:show_terminal_picker()
+    local terminals = {}
+    for buf, term in pairs(self.terminals) do
+      if api.nvim_buf_is_valid(buf) then
+        local name = api.nvim_buf_get_name(buf):match("term://(.+)$") or "terminal"
+        table.insert(terminals, {
+          name = name,
+          buf = buf,
+          type = term.type,
+          cmd = term.cmd
+        })
+      end
+    end
+    
+    require('fzf-lua').fzf_exec(
+      vim.tbl_map(function(t)
+        return string.format("%-30s │ %-15s │ %s", 
+          t.name,
+          t.type or "normal",
+          t.cmd or ""
+        )
+      end, terminals),
+      {
+        prompt = "Terminals > ",
+        actions = {
+          ["default"] = function(selected)
+            local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
+            for _, term in ipairs(terminals) do
+              if term.name == name then
+                self:show_terminal(term.buf)
+                break
+              end
+            end
+          end
+        },
+        fzf_opts = {
+          ["--delimiter"] = "│",
+          ["--with-nth"] = "1,2,3",
+          ["--header"] = "Name                           │ Type           │ Command"
+        }
+      }
+    )
+  end
+  
+  -- Add terminal picker keymap
+  vim.keymap.set('n', self.opts.keymaps.terminal_picker.key, function()
+    self:show_terminal_picker()
+  end, {
+    silent = true,
+    desc = self.opts.keymaps.terminal_picker.desc
+  })
 end
 
 return Neaterm
