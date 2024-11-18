@@ -794,10 +794,10 @@ function Neaterm:setup_terminal_settings(win, buf)
   })
 
   -- Add terminal title
-  if term.cmd then
-    local title = term.cmd:match("([^/]+)$") or "terminal"
-    api.nvim_buf_set_name(buf, string.format("term://%s", title))
-  end
+  -- if term.cmd then
+  --   local title = term.cmd:match("([^/]+)$") or "terminal"
+  --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
+  -- end
 end
 
 -- Add navigation methods
