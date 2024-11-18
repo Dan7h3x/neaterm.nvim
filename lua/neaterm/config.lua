@@ -9,22 +9,18 @@ local default_opts = {
   move_amount = 3,
   resize_amount = 2,
   border = 'rounded',
-  
+
   -- Appearance
   highlights = {
     normal = 'Normal',
     border = 'FloatBorder',
     title = 'Title',
   },
-  
+
   -- Window management
-  auto_close = true,
-  auto_insert = true,
-  persist_size = true,
-  persist_position = true,
   min_width = 20,
   min_height = 3,
-  
+
   -- Default keymaps
   keymaps = {
     toggle = '<A-t>',
@@ -52,18 +48,17 @@ local default_opts = {
     repl_variables = '<leader>rv',
     repl_restart = '<leader>rR',
   },
-  
+
   -- REPL configurations
   repl = {
     float_width = 0.6,
     float_height = 0.4,
-    auto_close = true,
     save_history = true,
     history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
     max_history = 100,
     update_interval = 5000,
   },
-  
+
   -- REPL language configurations
   repl_configs = {
     python = {
@@ -119,10 +114,10 @@ local default_opts = {
 function M.setup(user_opts)
   -- Ensure user_opts is a table
   user_opts = user_opts or {}
-  
+
   -- Deep copy of default options
   local opts = vim.deepcopy(default_opts)
-  
+
   -- Merge user options
   for key, value in pairs(user_opts) do
     if key == 'repl_configs' then
@@ -144,7 +139,7 @@ function M.setup(user_opts)
       end
     end
   end
-  
+
   return opts
 end
 
@@ -153,13 +148,13 @@ M.lazy = {
   'Dan7h3x/neaterm.nvim',
   event = 'VeryLazy',
   keys = {
-    { '<A-t>', desc = 'Toggle terminal' },
-    { '<C-\\>', desc = 'New vertical terminal' },
-    { '<C-.>', desc = 'New horizontal terminal' },
-    { '<C-A-t>', desc = 'New floating terminal' },
+    { '<A-t>',      desc = 'Toggle terminal' },
+    { '<C-\\>',     desc = 'New vertical terminal' },
+    { '<C-.>',      desc = 'New horizontal terminal' },
+    { '<C-A-t>',    desc = 'New floating terminal' },
     { '<leader>rt', desc = 'Toggle REPL menu' },
     { '<leader>rl', desc = 'Send line to REPL' },
-    { '<leader>rs', mode = 'v', desc = 'Send selection to REPL' },
+    { '<leader>rs', mode = 'v',                      desc = 'Send selection to REPL' },
     { '<leader>rb', desc = 'Send buffer to REPL' },
   },
   opts = {

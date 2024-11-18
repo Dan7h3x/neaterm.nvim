@@ -284,9 +284,8 @@ function Neaterm:setup_repl_configs()
   self.repl_configs = {
     python = {
       name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors=NoColor",
+      cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "%colors NoColor",
         "import sys",
         "sys.ps1 = 'In []: '",
         "sys.ps2 = '   ....: '",
@@ -712,10 +711,10 @@ function Neaterm:setup_terminal_settings(win, buf)
   }
 
   for lhs, map in pairs(term_maps) do
-    vim.keymap.set('t', lhs, map.cmd, { 
-      buffer = buf, 
+    vim.keymap.set('t', lhs, map.cmd, {
+      buffer = buf,
       silent = true,
-      desc = map.desc 
+      desc = map.desc
     })
   end
 
@@ -775,10 +774,10 @@ end
 function Neaterm:move_terminal(direction)
   local term = self.terminals[self.current_terminal]
   if not term or not term.window then return end
-  
+
   local win = term.window
   local config = api.nvim_win_get_config(win)
-  
+
   if config.relative == 'editor' then -- Floating window
     local changes = {
       up = { row = -self.opts.move_amount },
@@ -786,7 +785,7 @@ function Neaterm:move_terminal(direction)
       left = { col = -self.opts.move_amount },
       right = { col = self.opts.move_amount }
     }
-    
+
     self:update_float_position(win, changes[direction] or {})
   else -- Regular window
     local directions = {
@@ -802,10 +801,10 @@ end
 function Neaterm:resize_terminal(direction)
   local term = self.terminals[self.current_terminal]
   if not term or not term.window then return end
-  
+
   local win = term.window
   local config = api.nvim_win_get_config(win)
-  
+
   if config.relative == 'editor' then -- Floating window
     local changes = {
       up = { height = -self.opts.resize_amount },
@@ -813,7 +812,7 @@ function Neaterm:resize_terminal(direction)
       left = { width = -self.opts.resize_amount },
       right = { width = self.opts.resize_amount }
     }
-    
+
     self:update_float_position(win, changes[direction] or {})
   else -- Regular window
     local cmd = {
@@ -1063,10 +1062,10 @@ end
 
 function Neaterm:update_float_position(win, changes)
   if not win or not api.nvim_win_is_valid(win) then return end
-  
+
   local bounds = self:get_window_bounds(win)
   if bounds.relative ~= 'editor' then return end
-  
+
   -- Apply changes with bounds checking
   local new_config = {
     relative = 'editor',
@@ -1075,7 +1074,7 @@ function Neaterm:update_float_position(win, changes)
     row = bounds.row,
     col = bounds.col,
   }
-  
+
   if changes.row then
     new_config.row = math.max(0, math.min(bounds.row + changes.row, vim.o.lines - bounds.height - 2))
   end
@@ -1088,7 +1087,7 @@ function Neaterm:update_float_position(win, changes)
   if changes.height then
     new_config.height = math.max(3, math.min(bounds.height + changes.height, vim.o.lines - bounds.row - 2))
   end
-  
+
   api.nvim_win_set_config(win, new_config)
 end
 
@@ -1096,10 +1095,10 @@ end
 function Neaterm:setup_features()
   -- Terminal status line
   vim.opt.statusline = [[%{b:term_title}%=%{get(b:,'term_status','')}]]
-  
+
   -- Terminal completion
   vim.opt.complete:append('t')
-  
+
   -- Add terminal picker
   function self:show_terminal_picker()
     local terminals = {}
@@ -1114,10 +1113,10 @@ function Neaterm:setup_features()
         })
       end
     end
-    
+
     require('fzf-lua').fzf_exec(
       vim.tbl_map(function(t)
-        return string.format("%-30s │ %-15s │ %s", 
+        return string.format("%-30s │ %-15s │ %s",
           t.name,
           t.type or "normal",
           t.cmd or ""
@@ -1144,7 +1143,7 @@ function Neaterm:setup_features()
       }
     )
   end
-  
+
   -- Add terminal picker keymap
   vim.keymap.set('n', self.opts.keymaps.terminal_picker.key, function()
     self:show_terminal_picker()
