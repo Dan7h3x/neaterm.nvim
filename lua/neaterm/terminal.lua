@@ -88,63 +88,126 @@ end
 function Neaterm:create_terminal(opts)
   opts = opts or {}
   local buf = api.nvim_create_buf(false, true)
-
+  
   -- Set buffer options
   api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
   api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
   api.nvim_buf_set_option(buf, 'buflisted', false)
-
+  
   local win = utils.create_window(self.opts, opts, buf)
   local term_id = fn.termopen(opts.cmd or self.opts.shell, {
     on_exit = function(_, code)
       vim.schedule(function()
-        -- Only handle cleanup if the buffer still exists
         if api.nvim_buf_is_valid(buf) then
-          -- Remove from terminals table first
           self.terminals[buf] = nil
-
-          -- Update current terminal/repl references
           if self.current_terminal == buf then
             self.current_terminal = nil
           end
           if self.current_repl and self.current_repl.buf == buf then
             self.current_repl = nil
           end
-
-          -- Close window if it exists and is valid
           if win and api.nvim_win_is_valid(win) then
             pcall(api.nvim_win_close, win, true)
           end
-
-          -- Delete buffer last
           pcall(api.nvim_buf_delete, buf, { force = true })
         end
-
-        -- Update UI
         ui.update_bar(self)
       end)
     end
   })
-
+  
   if term_id <= 0 then
-    -- Terminal creation failed
     pcall(api.nvim_buf_delete, buf, { force = true })
     vim.notify("Failed to create terminal", vim.log.levels.ERROR)
     return nil
   end
-
-  self.terminals[buf] = {
+  
+  -- Store terminal info
+  local terminal_info = {
     window = win,
     job_id = term_id,
     type = opts.type,
-    cmd = opts.cmd
+    cmd = opts.cmd or self.opts.shell
+  }
+  self.terminals[buf] = terminal_info
+  
+  -- Setup terminal settings with the terminal info
+  self:setup_terminal_settings(win, buf, terminal_info)
+  
+  -- Set as current terminal
+  self.current_terminal = buf
+  
+  -- Update UI
+  ui.update_bar(self)
+  
+  -- Enter insert mode
+  vim.cmd('startinsert')
+  
+  return buf
+end
+
+function Neaterm:setup_terminal_settings(win, buf, terminal_info)
+  if not buf or not api.nvim_buf_is_valid(buf) then return end
+  
+  local term_mode_maps = {
+    ['<ESC><ESC>'] = {
+      cmd = '<C-\\><C-n>',
+      desc = 'Terminal: Exit insert mode'
+    },
+    ['<C-h>'] = {
+      cmd = '<C-\\><C-n><C-w>h',
+      desc = 'Terminal: Focus left window'
+    },
+    ['<C-j>'] = {
+      cmd = '<C-\\><C-n><C-w>j',
+      desc = 'Terminal: Focus down window'
+    },
+    ['<C-k>'] = {
+      cmd = '<C-\\><C-n><C-w>k',
+      desc = 'Terminal: Focus up window'
+    },
+    ['<C-l>'] = {
+      cmd = '<C-\\><C-n><C-w>l',
+      desc = 'Terminal: Focus right window'
+    },
+    ['<C-w>'] = {
+      cmd = '<C-\\><C-n><C-w>',
+      desc = 'Terminal: Window command prefix'
+    },
   }
 
-  self.current_terminal = buf
-  self:setup_terminal_settings(win, buf)
-  ui.update_bar(self)
-  vim.cmd('startinsert')
-  return buf
+  for lhs, map in pairs(term_mode_maps) do
+    vim.keymap.set('t', lhs, map.cmd, {
+      buffer = buf,
+      silent = true,
+      desc = map.desc
+    })
+  end
+
+  -- Auto-enter insert mode on terminal focus
+  api.nvim_create_autocmd("BufEnter", {
+    buffer = buf,
+    callback = function()
+      if vim.bo[buf].buftype == 'terminal' then
+        vim.cmd('startinsert')
+      end
+    end,
+    desc = "Terminal: Auto-enter insert mode"
+  })
+
+  -- Set terminal title if available
+  if terminal_info and terminal_info.cmd then
+    local title = terminal_info.cmd:match("([^/]+)$") or "terminal"
+    api.nvim_buf_set_name(buf, string.format("term://%s", title))
+  end
+
+  -- Set window options
+  if win and api.nvim_win_is_valid(win) then
+    api.nvim_win_set_option(win, 'number', false)
+    api.nvim_win_set_option(win, 'relativenumber', false)
+    api.nvim_win_set_option(win, 'signcolumn', 'no')
+    api.nvim_win_set_option(win, 'wrap', false)
+  end
 end
 
 -- REPL Management Methods
@@ -926,14 +989,26 @@ end
 
 -- Toggle terminal
 function Neaterm:toggle_terminal()
-  if not self.current_terminal then
-    self:create_terminal({ type = 'float' })
+  if not self.current_terminal or not api.nvim_buf_is_valid(self.current_terminal) then
+    self:create_terminal({ type = self.opts.default_type or 'float' })
+    return
+  end
+
+  local term = self.terminals[self.current_terminal]
+  if not term then
+    self:create_terminal({ type = self.opts.default_type or 'float' })
+    return
+  end
+
+  local win = term.window
+  if not win or not api.nvim_win_is_valid(win) then
+    -- Window was closed, create new one
+    local new_win = utils.create_window(self.opts, { type = term.type }, self.current_terminal)
+    term.window = new_win
+    vim.cmd('startinsert')
   else
-    local win = self.terminals[self.current_terminal].window
-    if api.nvim_win_is_valid(win) then
-      api.nvim_win_close(win, true)
-      self.current_terminal = nil
-    end
+    -- Window exists, hide it
+    api.nvim_win_hide(win)
   end
 end
 
