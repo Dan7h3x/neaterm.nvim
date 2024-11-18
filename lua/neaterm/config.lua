@@ -19,80 +19,111 @@ local default_opts = {
     },
   },
   keymaps = {
-    toggle = {
-      key = '<A-t>',
-      desc = 'Toggle terminal window'
+    terminal = {
+      prefix = {
+        key = "<leader>t",
+        desc = "Terminal commands"
+      },
+      toggle = {
+        key = "t",
+        desc = "Toggle terminal"
+      },
+      new_vertical = {
+        key = '<C-\\>',
+        desc = 'Create new vertical terminal'
+      },
+      new_horizontal = {
+        key = '<C-.>',
+        desc = 'Create new horizontal terminal'
+      },
+      new_float = {
+        key = '<C-A-t>',
+        desc = 'Create new floating terminal'
+      },
+      close = {
+        key = '<C-d>',
+        desc = 'Close current terminal'
+      },
+      next = {
+        key = '<C-PageDown>',
+        desc = 'Go to next terminal'
+      },
+      prev = {
+        key = '<C-PageUp>',
+        desc = 'Go to previous terminal'
+      },
+      move_up = {
+        key = '<C-A-Up>',
+        desc = 'Move terminal window up'
+      },
+      move_down = {
+        key = '<C-A-Down>',
+        desc = 'Move terminal window down'
+      },
+      move_left = {
+        key = '<C-A-Left>',
+        desc = 'Move terminal window left'
+      },
+      move_right = {
+        key = '<C-A-Right>',
+        desc = 'Move terminal window right'
+      },
+      resize_up = {
+        key = '<C-S-Up>',
+        desc = 'Decrease terminal height'
+      },
+      resize_down = {
+        key = '<C-S-Down>',
+        desc = 'Increase terminal height'
+      },
+      resize_left = {
+        key = '<C-S-Left>',
+        desc = 'Decrease terminal width'
+      },
+      resize_right = {
+        key = '<C-S-Right>',
+        desc = 'Increase terminal width'
+      },
+      focus_bar = '<C-A-b>',
     },
-    new_vertical = {
-      key = '<C-\\>',
-      desc = 'Create new vertical terminal'
-    },
-    new_horizontal = {
-      key = '<C-.>',
-      desc = 'Create new horizontal terminal'
-    },
-    new_float = {
-      key = '<C-A-t>',
-      desc = 'Create new floating terminal'
-    },
-    close = {
-      key = '<C-d>',
-      desc = 'Close current terminal'
-    },
-    next = {
-      key = '<C-PageDown>',
-      desc = 'Go to next terminal'
-    },
-    prev = {
-      key = '<C-PageUp>',
-      desc = 'Go to previous terminal'
-    },
-    move_up = {
-      key = '<C-A-Up>',
-      desc = 'Move terminal window up'
-    },
-    move_down = {
-      key = '<C-A-Down>',
-      desc = 'Move terminal window down'
-    },
-    move_left = {
-      key = '<C-A-Left>',
-      desc = 'Move terminal window left'
-    },
-    move_right = {
-      key = '<C-A-Right>',
-      desc = 'Move terminal window right'
-    },
-    resize_up = {
-      key = '<C-S-Up>',
-      desc = 'Decrease terminal height'
-    },
-    resize_down = {
-      key = '<C-S-Down>',
-      desc = 'Increase terminal height'
-    },
-    resize_left = {
-      key = '<C-S-Left>',
-      desc = 'Decrease terminal width'
-    },
-    resize_right = {
-      key = '<C-S-Right>',
-      desc = 'Increase terminal width'
-    },
-    focus_bar = '<C-A-b>',
-    repl_toggle = { key = '<leader>rt',
-  desc = 'Toggle REPL'},
-    repl_send_line = '<leader>rl',
-    repl_send_selection = '<leader>rs',
-    repl_send_buffer = '<leader>rb',
-    repl_clear = '<leader>rc',
-    repl_history = '<leader>rh',
-    repl_variables = '<leader>rv',
-    repl_restart = '<leader>rR',
-    terminal_picker = {
-      key = '<leader>tp',
-      desc = 'Show terminal picker'
-    },
+    repl = {
+      prefix = {
+        key = "<leader>r",
+        desc = "REPL commands"
+      },
+      toggle = {
+        key = "t",
+        desc = "Toggle REPL menu"
+      },
+      send_line = {
+        key = "l",
+        desc = "Send line to REPL"
+      },
+      send_selection = {
+        key = "s",
+        desc = "Send selection to REPL"
+      },
+      send_buffer = {
+        key = "b",
+        desc = "Send buffer to REPL"
+      },
+      clear = {
+        key = "c",
+        desc = "Clear REPL"
+      },
+      history = {
+        key = "h",
+        desc = "Show command history"
+      },
+      variables = {
+        key = "v",
+        desc = "Show/inspect variables"
+      },
+      restart = {
+        key = "r",
+        desc = "Restart REPL"
+      },
+    }
   },
   repl = {
     float_width = 0.6,
@@ -244,6 +275,37 @@ function M.setup(user_opts)
   end
   
   return opts
+end
+
+-- Add which-key registration
+function M.setup_which_key()
+  local ok, wk = pcall(require, "which-key")
+  if not ok then return end
+
+  wk.register({
+    [default_opts.keymaps.terminal.prefix.key] = {
+      name = "Terminal",
+      t = "Toggle terminal",
+      v = "New vertical terminal",
+      h = "New horizontal terminal",
+      f = "New floating terminal",
+      n = "Next terminal",
+      p = "Previous terminal",
+      c = "Close terminal",
+      ["1-9"] = "Go to terminal #",
+    },
+    [default_opts.keymaps.repl.prefix.key] = {
+      name = "REPL",
+      t = "Toggle REPL menu",
+      l = "Send line",
+      s = "Send selection",
+      b = "Send buffer",
+      c = "Clear REPL",
+      h = "Show history",
+      v = "Show variables",
+      r = "Restart REPL",
+    },
+  })
 end
 
 return M
