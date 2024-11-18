@@ -88,12 +88,12 @@ end
 function Neaterm:create_terminal(opts)
   opts = opts or {}
   local buf = api.nvim_create_buf(false, true)
-  
+
   -- Set buffer options
   api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
   api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
   api.nvim_buf_set_option(buf, 'buflisted', false)
-  
+
   local win = utils.create_window(self.opts, opts, buf)
   local term_id = fn.termopen(opts.cmd or self.opts.shell, {
     on_exit = function(_, code)
@@ -102,7 +102,7 @@ function Neaterm:create_terminal(opts)
         if api.nvim_buf_is_valid(buf) then
           -- Remove from terminals table first
           self.terminals[buf] = nil
-          
+
           -- Update current terminal/repl references
           if self.current_terminal == buf then
             self.current_terminal = nil
@@ -110,40 +110,40 @@ function Neaterm:create_terminal(opts)
           if self.current_repl and self.current_repl.buf == buf then
             self.current_repl = nil
           end
-          
+
           -- Close window if it exists and is valid
           if win and api.nvim_win_is_valid(win) then
             pcall(api.nvim_win_close, win, true)
           end
-          
+
           -- Delete buffer last
           pcall(api.nvim_buf_delete, buf, { force = true })
         end
-        
+
         -- Update UI
         ui.update_bar(self)
       end)
     end
   })
-  
+
   if term_id <= 0 then
     -- Terminal creation failed
     pcall(api.nvim_buf_delete, buf, { force = true })
     vim.notify("Failed to create terminal", vim.log.levels.ERROR)
     return nil
   end
-  
+
   self.terminals[buf] = {
     window = win,
     job_id = term_id,
     type = opts.type,
     cmd = opts.cmd
   }
-  
+
   self.current_terminal = buf
   self:setup_terminal_settings(win, buf)
   ui.update_bar(self)
-  
+
   return buf
 end
 
@@ -190,19 +190,19 @@ function Neaterm:_create_new_repl(repl_config)
     cmd = repl_config.cmd,
     type = repl_config.type,
   })
-  
+
   if not buf then
     vim.notify("Failed to create REPL terminal", vim.log.levels.ERROR)
     return
   end
-  
+
   self.current_repl = {
     buf = buf,
     filetype = repl_config.filetype,
     config = self.repl_configs[repl_config.filetype],
     type = repl_config.type
   }
-  
+
   -- Execute startup commands after a delay
   if self.current_repl.config.startup_cmds then
     vim.defer_fn(function()
@@ -238,28 +238,28 @@ end
 -- Text Sending Methods
 function Neaterm:send_text(text)
   if not text then return end
-  
+
   local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
   if not term_buf or not self.terminals[term_buf] then
     vim.notify("No active terminal", vim.log.levels.WARN)
     return
   end
-  
+
   local term = self.terminals[term_buf]
   if not term or not term.job_id then return end
-  
+
   -- Check if job is still valid
-  local valid_job = vim.fn.jobwait({term.job_id}, 0)[1] == -1
+  local valid_job = vim.fn.jobwait({ term.job_id }, 0)[1] == -1
   if not valid_job then
     vim.notify("Terminal job is no longer valid", vim.log.levels.WARN)
     return
   end
-  
+
   local formatted_text = tostring(text)
   if not formatted_text:match("\n$") then
     formatted_text = formatted_text .. "\n"
   end
-  
+
   -- Safely send text to terminal
   local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
   if not success then
@@ -388,23 +388,23 @@ end
 -- Add this to store variables
 function Neaterm:capture_variables_async()
   if not self.current_repl then return {} end
-  
+
   local config = self.repl_configs[self.current_repl.filetype]
   if not config or not config.get_variables_cmd then return {} end
 
   -- Create a temporary buffer for capturing output
   local temp_buf = api.nvim_create_buf(false, true)
   local output = ""
-  
+
   -- Send command and capture output
   self:send_text(config.get_variables_cmd)
-  
+
   -- Wait briefly for output
   vim.defer_fn(function()
     -- Get the terminal buffer content
     local lines = api.nvim_buf_get_lines(self.current_repl.buf, -20, -1, false)
     output = table.concat(lines, "\n")
-    
+
     -- Parse the output
     local vars = {}
     if config.parse_output then
@@ -421,14 +421,14 @@ function Neaterm:capture_variables_async()
         end
       end
     end
-    
+
     -- Store variables
     local vars_file = string.format(
       "%s/neaterm_%s_vars.json",
       vim.fn.stdpath('data'),
       self.current_repl.filetype
     )
-    
+
     local ok, encoded = pcall(vim.json.encode, vars)
     if ok then
       local file = io.open(vars_file, 'w')
@@ -437,10 +437,10 @@ function Neaterm:capture_variables_async()
         file:close()
       end
     end
-    
+
     -- Cleanup
     pcall(api.nvim_buf_delete, temp_buf, { force = true })
-    
+
     return vars
   end, 100)
 end
@@ -448,13 +448,13 @@ end
 -- Add this for file-based variable storage
 function Neaterm:store_variables()
   if not self.current_repl then return end
-  
+
   local vars_file = string.format(
     "%s/neaterm_%s_vars.json",
     vim.fn.stdpath('data'),
     self.current_repl.filetype
   )
-  
+
   local vars = self:capture_variables_async()
   if next(vars) then
     local ok, encoded = pcall(vim.json.encode, vars)
@@ -588,19 +588,19 @@ end
 -- Cleanup Methods
 function Neaterm:cleanup_terminal(buf)
   if not buf or not self.terminals[buf] then return end
-  
+
   local term = self.terminals[buf]
-  
+
   -- Close window if it exists
   if term.window and api.nvim_win_is_valid(term.window) then
     pcall(api.nvim_win_close, term.window, true)
   end
-  
+
   -- Delete buffer if it exists
   if api.nvim_buf_is_valid(buf) then
     pcall(api.nvim_buf_delete, buf, { force = true })
   end
-  
+
   -- Clean up references
   self.terminals[buf] = nil
   if self.current_terminal == buf then
@@ -609,27 +609,27 @@ function Neaterm:cleanup_terminal(buf)
   if self.current_repl and self.current_repl.buf == buf then
     self.current_repl = nil
   end
-  
+
   ui.update_bar(self)
 end
 
 function Neaterm:safe_close_repl()
   if not self.current_repl then return end
-  
+
   local repl = self.current_repl
   local config = self.repl_configs[repl.filetype]
-  
+
   -- Only try to send exit command if terminal is still valid
   if config and config.exit_cmd and self.terminals[repl.buf] then
     local term = self.terminals[repl.buf]
     if term and term.job_id then
-      local valid_job = vim.fn.jobwait({term.job_id}, 0)[1] == -1
+      local valid_job = vim.fn.jobwait({ term.job_id }, 0)[1] == -1
       if valid_job then
         self:send_text(config.exit_cmd)
       end
     end
   end
-  
+
   -- Wait briefly before cleanup
   vim.defer_fn(function()
     if repl.buf and api.nvim_buf_is_valid(repl.buf) then
@@ -640,14 +640,14 @@ function Neaterm:safe_close_repl()
           api.nvim_win_close(win, true)
         end
       end
-      
+
       -- Delete buffer directly without modification
       pcall(api.nvim_buf_delete, repl.buf, { force = true })
-      
+
       -- Clean up terminal entry
       self.terminals[repl.buf] = nil
     end
-    
+
     -- Clear current REPL
     self.current_repl = nil
     ui.update_bar(self)
@@ -930,7 +930,7 @@ function Neaterm:parse_repl_output(output, filetype)
       end
       return vars
     end,
-    
+
     r = function(out)
       local vars = {}
       -- Parse ls() output and get more info using str()
@@ -947,7 +947,7 @@ function Neaterm:parse_repl_output(output, filetype)
       end
       return vars
     end,
-    
+
     julia = function(out)
       local vars = {}
       for line in out:gmatch("[^\r\n]+") do
@@ -972,7 +972,7 @@ function Neaterm:parse_repl_output(output, filetype)
   if config.parse_output then
     return config.parse_output(output)
   end
-  
+
   -- Use default parser for the language if available
   return (parsers[filetype] or function() return {} end)(output)
 end
@@ -980,13 +980,13 @@ end
 -- Add this helper function to safely close windows and buffers
 function Neaterm:safe_close_terminal(buf)
   if not buf or not self.terminals[buf] then return end
-  
+
   local term = self.terminals[buf]
   if term.job_id then
     -- Try to terminate the job gracefully
     pcall(vim.fn.jobstop, term.job_id)
   end
-  
+
   vim.defer_fn(function()
     self:cleanup_terminal(buf)
   end, 50)
