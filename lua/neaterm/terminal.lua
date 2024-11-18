@@ -1053,8 +1053,8 @@ end
 function Neaterm:get_window_bounds(win)
   local config = api.nvim_win_get_config(win)
   return {
-    row = config.row[false],
-    col = config.col[false],
+    row = type(config.row) == "table" and config.row[false] or config.row,
+    col = type(config.col) == "table" and config.col[false] or config.col,
     width = config.width,
     height = config.height,
     relative = config.relative
@@ -1064,30 +1064,29 @@ end
 function Neaterm:update_float_position(win, changes)
   if not win or not api.nvim_win_is_valid(win) then return end
   
-  local config = api.nvim_win_get_config(win)
-  if config.relative ~= 'editor' then return end
+  local bounds = self:get_window_bounds(win)
+  if bounds.relative ~= 'editor' then return end
   
-  -- Separate position and size changes
+  -- Apply changes with bounds checking
   local new_config = {
     relative = 'editor',
-    width = config.width,
-    height = config.height,
-    row = config.row[false],
-    col = config.col[false],
+    width = bounds.width,
+    height = bounds.height,
+    row = bounds.row,
+    col = bounds.col,
   }
   
-  -- Apply changes
   if changes.row then
-    new_config.row = math.max(0, math.min(new_config.row + changes.row, vim.o.lines - new_config.height - 2))
+    new_config.row = math.max(0, math.min(bounds.row + changes.row, vim.o.lines - bounds.height - 2))
   end
   if changes.col then
-    new_config.col = math.max(0, math.min(new_config.col + changes.col, vim.o.columns - new_config.width - 2))
+    new_config.col = math.max(0, math.min(bounds.col + changes.col, vim.o.columns - bounds.width - 2))
   end
   if changes.width then
-    new_config.width = math.max(20, math.min(new_config.width + changes.width, vim.o.columns - new_config.col - 2))
+    new_config.width = math.max(20, math.min(bounds.width + changes.width, vim.o.columns - bounds.col - 2))
   end
   if changes.height then
-    new_config.height = math.max(3, math.min(new_config.height + changes.height, vim.o.lines - new_config.row - 2))
+    new_config.height = math.max(3, math.min(bounds.height + changes.height, vim.o.lines - bounds.row - 2))
   end
   
   api.nvim_win_set_config(win, new_config)
