@@ -65,9 +65,9 @@ local default_opts = {
       name = "Python (IPython)",
       cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "import sys",
-        "sys.ps1 = 'In []: '",
-        "sys.ps2 = '   ....: '",
+        -- "import sys",
+        -- "sys.ps1 = 'In []: '",
+        -- "sys.ps2 = '   ....: '",
       },
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
@@ -77,8 +77,8 @@ local default_opts = {
       name = "R (Radian)",
       cmd = "radian",
       startup_cmds = {
-        "options(width = 80)",
-        "options(prompt = 'R> ')",
+        -- "options(width = 80)",
+        -- "options(prompt = 'R> ')",
       },
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
