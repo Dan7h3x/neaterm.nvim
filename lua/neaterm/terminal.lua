@@ -79,44 +79,88 @@ function Neaterm:setup_keymaps()
   -- end
   local maps = {
     -- Basic terminal operations
-    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,                        desc = "Toggle terminal" },
-    { key = self.opts.keymaps.new_vertical,     func = function() self:create_terminal({ type = 'vertical' }) end,   desc = "Create vertical terminal" },
-    { key = self.opts.keymaps.new_horizontal,   func = function() self:create_terminal({ type = 'horizontal' }) end, desc = "Create horizontal terminal" },
-    { key = self.opts.keymaps.new_float,        func = function() self:create_terminal({ type = 'float' }) end,      desc = "Create floating terminal" },
-    { key = self.opts.keymaps.close,            func = function() self:close_current_terminal() end,                 desc = "Close current terminal" },
+    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,     desc = "Toggle terminal",     mode = { 'n', 't' } },
+    {
+      key = self.opts.keymaps.new_vertical,
+      func = function() self:create_terminal({ type = 'vertical' }) end,
+      desc =
+      "Create vertical terminal",
+      mode = { 'n', 't' }
+    },
+    {
+      key = self.opts.keymaps.new_horizontal,
+      func = function() self:create_terminal({ type = 'horizontal' }) end,
+      desc =
+      "Create horizontal terminal",
+      mode = { 'n', 't' }
+    },
+    {
+      key = self.opts.keymaps.new_float,
+      func = function() self:create_terminal({ type = 'float' }) end,
+      desc =
+      "Create floating terminal",
+      mode = { 'n', 't' }
+    },
+    { key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close current terminal", mode = { 'n', 't' }
+    },
 
     -- Terminal navigation
-    { key = self.opts.keymaps.next,             func = function() self:next_terminal() end,                          desc = "Next terminal" },
-    { key = self.opts.keymaps.prev,             func = function() self:prev_terminal() end,                          desc = "Previous terminal" },
+    { key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal", mode = { 'n', 't' }
+    },
+    { key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal", mode = { 'n', 't' }
+    },
 
     -- Terminal movement
-    { key = self.opts.keymaps.move_up,          func = function() self:move_terminal('up') end,                      desc = "Move terminal up" },
-    { key = self.opts.keymaps.move_down,        func = function() self:move_terminal('down') end,                    desc = "Move terminal down" },
-    { key = self.opts.keymaps.move_left,        func = function() self:move_terminal('left') end,                    desc = "Move terminal left" },
-    { key = self.opts.keymaps.move_right,       func = function() self:move_terminal('right') end,                   desc = "Move terminal right" },
+    { key = self.opts.keymaps.move_up, func = function() self:move_terminal('up') end, desc = "Move terminal up", mode = { 'n', 't' }
+    },
+    { key = self.opts.keymaps.move_down, func = function() self:move_terminal('down') end, desc = "Move terminal down", mode = { 'n', 't' }
+    },
+    { key = self.opts.keymaps.move_left, func = function() self:move_terminal('left') end, desc = "Move terminal left", mode = { 'n', 't' }
+    },
+    { key = self.opts.keymaps.move_right, func = function() self:move_terminal('right') end, desc = "Move terminal right", mode = { 'n', 't' }
+    },
 
     -- Terminal resizing
-    { key = self.opts.keymaps.resize_up,        func = function() self:resize_terminal('up') end,                    desc = "Resize terminal up" },
-    { key = self.opts.keymaps.resize_down,      func = function() self:resize_terminal('down') end,                  desc = "Resize terminal down" },
-    { key = self.opts.keymaps.resize_left,      func = function() self:resize_terminal('left') end,                  desc = "Resize terminal left" },
-    { key = self.opts.keymaps.resize_right,     func = function() self:resize_terminal('right') end,                 desc = "Resize terminal right" },
+    { key = self.opts.keymaps.resize_up, func = function() self:resize_terminal('up') end, desc = "Resize terminal up", mode = { 'n', 't' }
+    },
+    {
+      key = self.opts.keymaps.resize_down,
+      func = function() self:resize_terminal('down') end,
+      desc =
+      "Resize terminal down",
+      mode = { 'n', 't' }
+    },
+    {
+      key = self.opts.keymaps.resize_left,
+      func = function() self:resize_terminal('left') end,
+      desc =
+      "Resize terminal left",
+      mode = { 'n', 't' }
+    },
+    {
+      key = self.opts.keymaps.resize_right,
+      func = function() self:resize_terminal('right') end,
+      desc =
+      "Resize terminal right",
+      mode = { 'n', 't' }
+    },
 
     -- REPL operations
-    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,                         desc = "Toggle REPL menu" },
-    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,                      desc = "Send line to REPL" },
-    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end,                    desc = "Send buffer to REPL" },
-    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,                             desc = "Clear REPL" },
-    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,                           desc = "Show REPL history" },
-    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,                         desc = "Show REPL variables" },
-    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,                           desc = "Restart REPL" },
+    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,      desc = "Toggle REPL menu",    mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,   desc = "Send line to REPL",   mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end, desc = "Send buffer to REPL", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,          desc = "Clear REPL",          mode = { 'n' } },
+    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,        desc = "Show REPL history",   mode = { 'n' } },
+    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,      desc = "Show REPL variables", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,        desc = "Restart REPL",        mode = { 'n' } },
 
     -- Bar operations
-    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,                              desc = "Focus bar" },
+    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,           desc = "Focus bar",           mode = { 'n' } },
   }
 
   -- Set normal mode mappings
   for _, map in ipairs(maps) do
-    vim.keymap.set('n', map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+    vim.keymap.set(map.mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
   end
 
   -- Set visual mode mapping for REPL selection
@@ -758,88 +802,88 @@ function Neaterm:safe_close_repl()
 end
 
 -- Add this method to the Neaterm class
-function Neaterm:setup_terminal_settings(win, buf)
-  -- Window-specific settings
-  local win_opts = {
-    number = false,
-    relativenumber = false,
-    signcolumn = "no",
-    wrap = false,
-  }
-
-  for opt, value in pairs(win_opts) do
-    api.nvim_win_set_option(win, opt, value)
-  end
-
-  -- Buffer-specific settings
-  local buf_opts = {
-    bufhidden = "hide",
-    filetype = "neaterm",
-    buflisted = false,
-  }
-
-  for opt, value in pairs(buf_opts) do
-    api.nvim_buf_set_option(buf, opt, value)
-  end
-
-  -- Terminal-specific keymaps with descriptions
-  local term_maps = {
-    ['<ESC><ESC>'] = {
-      cmd = '<C-\\><C-n>',
-      desc = 'Exit terminal insert mode'
-    },
-    ['<C-\\><C-n>'] = {
-      cmd = '<Cmd>startinsert<CR>',
-      desc = 'Enter terminal insert mode'
-    },
-    ['<C-h>'] = {
-      cmd = '<Cmd>wincmd h<CR>',
-      desc = 'Move to left window'
-    },
-    ['<C-j>'] = {
-      cmd = '<Cmd>wincmd j<CR>',
-      desc = 'Move to bottom window'
-    },
-    ['<C-k>'] = {
-      cmd = '<Cmd>wincmd k<CR>',
-      desc = 'Move to top window'
-    },
-    ['<C-l>'] = {
-      cmd = '<Cmd>wincmd l<CR>',
-      desc = 'Move to right window'
-    },
-    ['<C-w>'] = {
-      cmd = '<C-\\><C-n><C-w>',
-      desc = 'Window command prefix'
-    }
-  }
-
-  for lhs, map in pairs(term_maps) do
-    vim.keymap.set('t', lhs, map.cmd, {
-      buffer = buf,
-      silent = true,
-      desc = map.desc
-    })
-  end
-
-  -- Add new features
-  -- Auto-resize on terminal window focus
-  api.nvim_create_autocmd("WinEnter", {
-    buffer = buf,
-    callback = function()
-      if vim.bo[buf].buftype == 'terminal' then
-        vim.cmd('startinsert')
-      end
-    end,
-    desc = "Auto-enter insert mode in terminal"
-  })
-
-  -- Add terminal title
-  -- if term.cmd then
-  --   local title = term.cmd:match("([^/]+)$") or "terminal"
-  --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
-  -- end
-end
+-- function Neaterm:setup_terminal_settings(win, buf)
+--   -- Window-specific settings
+--   local win_opts = {
+--     number = false,
+--     relativenumber = false,
+--     signcolumn = "no",
+--     wrap = false,
+--   }
+--
+--   for opt, value in pairs(win_opts) do
+--     api.nvim_win_set_option(win, opt, value)
+--   end
+--
+--   -- Buffer-specific settings
+--   local buf_opts = {
+--     bufhidden = "hide",
+--     filetype = "neaterm",
+--     buflisted = false,
+--   }
+--
+--   for opt, value in pairs(buf_opts) do
+--     api.nvim_buf_set_option(buf, opt, value)
+--   end
+--
+--   -- Terminal-specific keymaps with descriptions
+--   local term_maps = {
+--     ['<ESC><ESC>'] = {
+--       cmd = '<C-\\><C-n>',
+--       desc = 'Exit terminal insert mode'
+--     },
+--     ['<C-\\><C-n>'] = {
+--       cmd = '<Cmd>startinsert<CR>',
+--       desc = 'Enter terminal insert mode'
+--     },
+--     ['<C-h>'] = {
+--       cmd = '<Cmd>wincmd h<CR>',
+--       desc = 'Move to left window'
+--     },
+--     ['<C-j>'] = {
+--       cmd = '<Cmd>wincmd j<CR>',
+--       desc = 'Move to bottom window'
+--     },
+--     ['<C-k>'] = {
+--       cmd = '<Cmd>wincmd k<CR>',
+--       desc = 'Move to top window'
+--     },
+--     ['<C-l>'] = {
+--       cmd = '<Cmd>wincmd l<CR>',
+--       desc = 'Move to right window'
+--     },
+--     ['<C-w>'] = {
+--       cmd = '<C-\\><C-n><C-w>',
+--       desc = 'Window command prefix'
+--     }
+--   }
+--
+--   for lhs, map in pairs(term_maps) do
+--     vim.keymap.set('t', lhs, map.cmd, {
+--       buffer = buf,
+--       silent = true,
+--       desc = map.desc
+--     })
+--   end
+--
+--   -- Add new features
+--   -- Auto-resize on terminal window focus
+--   api.nvim_create_autocmd("WinEnter", {
+--     buffer = buf,
+--     callback = function()
+--       if vim.bo[buf].buftype == 'terminal' then
+--         vim.cmd('startinsert')
+--       end
+--     end,
+--     desc = "Auto-enter insert mode in terminal"
+--   })
+--
+--   -- Add terminal title
+--   -- if term.cmd then
+--   --   local title = term.cmd:match("([^/]+)$") or "terminal"
+--   --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
+--   -- end
+-- end
 
 -- Add navigation methods
 function Neaterm:next_terminal()
