@@ -85,21 +85,21 @@ function Neaterm:setup_keymaps()
       func = function() self:create_terminal({ type = 'vertical' }) end,
       desc =
       "Create vertical terminal",
-      mode = { 'n', 't' }
+      mode = { 'n' }
     },
     {
       key = self.opts.keymaps.new_horizontal,
       func = function() self:create_terminal({ type = 'horizontal' }) end,
       desc =
       "Create horizontal terminal",
-      mode = { 'n', 't' }
+      mode = { 'n' }
     },
     {
       key = self.opts.keymaps.new_float,
       func = function() self:create_terminal({ type = 'float' }) end,
       desc =
       "Create floating terminal",
-      mode = { 'n', 't' }
+      mode = { 'n' }
     },
     { key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close current terminal", mode = { 'n', 't' }
     },
