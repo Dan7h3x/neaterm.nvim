@@ -280,11 +280,11 @@ function Neaterm:setup_terminal_settings(win, buf, terminal_info)
     desc = "Terminal: Auto-enter insert mode"
   })
 
-  -- Set terminal title if available
-  if terminal_info and terminal_info.cmd then
-    local title = terminal_info.cmd:match("([^/]+)$") or "terminal"
-    api.nvim_buf_set_name(buf, string.format("term://%s", title))
-  end
+  -- -- Set terminal title if available
+  -- if terminal_info and terminal_info.cmd then
+  --   local title = terminal_info.cmd:match("([^/]+)$") or "terminal"
+  --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
+  -- end
 
   -- Set window options
   if win and api.nvim_win_is_valid(win) then
