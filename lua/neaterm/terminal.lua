@@ -34,49 +34,6 @@ end
 
 function Neaterm:setup_keymaps()
   local opts = { noremap = true, silent = true }
-  --
-  -- -- Terminal management
-  -- local maps = {
-  --   -- Basic terminal operations
-  --   [self.opts.keymaps.toggle] = function() self:toggle_terminal() end,
-  --   [self.opts.keymaps.new_vertical] = function() self:create_terminal({ type = 'vertical' }) end,
-  --   [self.opts.keymaps.new_horizontal] = function() self:create_terminal({ type = 'horizontal' }) end,
-  --   [self.opts.keymaps.new_float] = function() self:create_terminal({ type = 'float' }) end,
-  --   [self.opts.keymaps.close] = function() self:close_current_terminal() end,
-  --
-  --   -- Terminal navigation
-  --   [self.opts.keymaps.next] = function() self:next_terminal() end,
-  --   [self.opts.keymaps.prev] = function() self:prev_terminal() end,
-  --
-  --   -- Terminal movement
-  --   [self.opts.keymaps.move_up] = function() self:move_terminal('up') end,
-  --   [self.opts.keymaps.move_down] = function() self:move_terminal('down') end,
-  --   [self.opts.keymaps.move_left] = function() self:move_terminal('left') end,
-  --   [self.opts.keymaps.move_right] = function() self:move_terminal('right') end,
-  --
-  --   -- Terminal resizing
-  --   [self.opts.keymaps.resize_up] = function() self:resize_terminal('up') end,
-  --   [self.opts.keymaps.resize_down] = function() self:resize_terminal('down') end,
-  --   [self.opts.keymaps.resize_left] = function() self:resize_terminal('left') end,
-  --   [self.opts.keymaps.resize_right] = function() self:resize_terminal('right') end,
-  --
-  --   -- REPL operations
-  --   [self.opts.keymaps.repl_toggle] = function() self:show_repl_menu() end,
-  --   [self.opts.keymaps.repl_send_line] = function() self:send_line_to_repl() end,
-  --   [self.opts.keymaps.repl_send_buffer] = function() self:send_buffer_to_repl() end,
-  --   [self.opts.keymaps.repl_clear] = function() self:clear_repl() end,
-  --   [self.opts.keymaps.repl_history] = function() self:show_history() end,
-  --   [self.opts.keymaps.repl_variables] = function() self:show_variables() end,
-  --   [self.opts.keymaps.repl_restart] = function() self:restart_repl() end,
-  --
-  --   -- Bar operations
-  --   [self.opts.keymaps.focus_bar] = function() self:focus_bar() end,
-  -- }
-  --
-  -- -- Set normal mode mappings
-  -- for key, func in pairs(maps) do
-  --   vim.keymap.set('n', key, func, opts)
-  -- end
   local maps = {
     -- Basic terminal operations
     { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,     desc = "Toggle terminal",     mode = { 'n', 't' } },
