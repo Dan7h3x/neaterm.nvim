@@ -108,48 +108,29 @@ function M.send_to_repl(neaterm, text)
   end
 end
 
-function M.smart_send_to_repl(neaterm, text)
-  if not neaterm.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = neaterm.current_repl.config
-  local paste_cmd = config and config.paste_cmd
-
-  if paste_cmd then
-    -- Use paste mode if available
-    if paste_cmd.start then
-      neaterm:send_text(paste_cmd.start)
-      -- Small delay to ensure REPL is ready
-      vim.defer_fn(function()
-        neaterm:send_text(text)
-        if paste_cmd.end_marker then
-          neaterm:send_text(paste_cmd.end_marker)
-        end
-      end, 100)
-    end
-  else
-    -- Fallback to regular send
-    M.send_to_repl(neaterm, text)
-  end
-end
-
 function M.send_line(neaterm)
   local line = api.nvim_get_current_line()
-  M.smart_send_to_repl(neaterm, line)
+  M.send_to_repl(neaterm, line)
 end
 
 function M.send_selection(neaterm)
-  local text = neaterm.utils.get_visual_selection()
-  if text ~= "" then
-    M.smart_send_to_repl(neaterm, text)
+  local start_pos = fn.getpos("'<")
+  local end_pos = fn.getpos("'>")
+  local lines = api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+  if #lines > 0 then
+    if start_pos[2] == end_pos[2] then
+      lines[1] = lines[1]:sub(start_pos[3], end_pos[3])
+    else
+      lines[1] = lines[1]:sub(start_pos[3])
+      lines[#lines] = lines[#lines]:sub(1, end_pos[3])
+    end
+    M.send_to_repl(neaterm, table.concat(lines, "\n"))
   end
 end
 
 function M.send_buffer(neaterm)
   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-  M.smart_send_to_repl(neaterm, table.concat(lines, "\n"))
+  M.send_to_repl(neaterm, table.concat(lines, "\n"))
 end
 
 function M.clear_repl(neaterm)
