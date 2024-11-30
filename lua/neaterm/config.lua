@@ -15,6 +15,8 @@ local default_opts = {
     normal = 'Normal',
     border = 'FloatBorder',
     title = 'Title',
+    active = 'Visual',
+    repl = 'Type',
   },
 
   -- Window management

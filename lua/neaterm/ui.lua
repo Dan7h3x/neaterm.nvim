@@ -95,6 +95,11 @@ function M.update_bar(neaterm)
 end
 
 function M.setup_highlights(opts)
+  if not opts.highlights then
+    vim.notify("Highlights configuration is missing", vim.log.levels.ERROR)
+    return
+  end
+
   api.nvim_set_hl(0, 'NeatermNormal', { link = opts.highlights.normal, default = true })
   api.nvim_set_hl(0, 'NeatermBorder', { link = opts.highlights.border, default = true })
   api.nvim_set_hl(0, 'NeatermActive', { link = opts.highlights.active, default = true })
