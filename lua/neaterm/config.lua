@@ -48,6 +48,7 @@ local default_opts = {
     repl_variables = { key = '<leader>rv', enabled = true },
     repl_restart = { key = '<leader>rR', enabled = true },
   },
+  disable_default_keymaps = false,
 
   -- REPL configurations
   repl = {
@@ -137,11 +138,13 @@ function M.setup(user_opts)
 
   -- Merge user options
   opts = vim.tbl_deep_extend("force", default_opts, user_opts)
+  local Neaterm = require('neaterm.terminal')
+  local neaterm = Neaterm.new(opts)
 
   -- Setup keymaps
   neaterm:setup_keymaps(opts.keymaps)
 
-  return opts
+  return neaterm
 end
 
 -- Configuration for lazy.nvim

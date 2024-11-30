@@ -53,7 +53,10 @@ end
 function Neaterm:create_terminal(opts)
   opts = opts or {}
   local buf = api.nvim_create_buf(false, true)
-
+  if not buf then
+    vim.notify("Failed to create terminal buffer", vim.log.levels.ERROR)
+    return nil
+  end
   -- Set buffer options
   api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
   api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
