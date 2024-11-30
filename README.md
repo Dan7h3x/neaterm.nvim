@@ -35,9 +35,10 @@ with following default configuration:
 }
 ```
 
-or change the configuration based on what you want:
+or change the configuration based on what you want and enabling/disabling
+keymaps:
 
-```lua
+````lua
 opts = {
   -- Terminal settings
   shell = vim.o.shell,
@@ -60,30 +61,30 @@ opts = {
 
   -- Default keymaps
   keymaps = {
-    toggle = '<A-t>',
-    new_vertical = '<C-\\>',
-    new_horizontal = '<C-.>',
-    new_float = '<C-A-t>',
-    close = '<C-d>',
-    next = '<C-PageDown>',
-    prev = '<C-PageUp>',
-    move_up = '<C-A-Up>',
-    move_down = '<C-A-Down>',
-    move_left = '<C-A-Left>',
-    move_right = '<C-A-Right>',
-    resize_up = '<C-S-Up>',
-    resize_down = '<C-S-Down>',
-    resize_left = '<C-S-Left>',
-    resize_right = '<C-S-Right>',
-    focus_bar = '<C-A-b>',
-    repl_toggle = '<leader>rt',
-    repl_send_line = '<leader>rl',
-    repl_send_selection = '<leader>rs',
-    repl_send_buffer = '<leader>rb',
-    repl_clear = '<leader>rc',
-    repl_history = '<leader>rh',
-    repl_variables = '<leader>rv',
-    repl_restart = '<leader>rR',
+    toggle = { key = '<A-t>', enabled = true },
+    new_vertical = { key = '<C-\\>', enabled = true },
+    new_horizontal = { key = '<C-.>', enabled = true },
+    new_float = { key = '<C-A-t>', enabled = true },
+    close = { key = '<C-d>', enabled = true },
+    next = { key = '<C-PageDown>', enabled = true },
+    prev = { key = '<C-PageUp>', enabled = true },
+    move_up = { key = '<C-A-Up>', enabled = true },
+    move_down = { key = '<C-A-Down>', enabled = true },
+    move_left = { key = '<C-A-Left>', enabled = true },
+    move_right = { key = '<C-A-Right>', enabled = true },
+    resize_up = { key = '<C-S-Up>', enabled = true },
+    resize_down = { key = '<C-S-Down>', enabled = true },
+    resize_left = { key = '<C-S-Left>', enabled = true },
+    resize_right = { key = '<C-S-Right>', enabled = true },
+    focus_bar = { key = '<C-A-b>', enabled = true },
+    repl_toggle = { key = '<leader>rt', enabled = true },
+    repl_send_line = { key = '<leader>rl', enabled = true },
+    repl_send_selection = { key = '<leader>rs', enabled = true },
+    repl_send_buffer = { key = '<leader>rb', enabled = true },
+    repl_clear = { key = '<leader>rc', enabled = true },
+    repl_history = { key = '<leader>rh', enabled = true },
+    repl_variables = { key = '<leader>rv', enabled = true },
+    repl_restart = { key = '<leader>rR', enabled = true },
   },
 
   -- REPL configurations
@@ -109,6 +110,10 @@ opts = {
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
       exit_cmd = "exit()",
+      paste_cmd = {
+        start = "%paste",
+        end_marker = "--", -- IPython will automatically handle the paste
+      },
     },
     r = {
       name = "R (Radian)",
@@ -120,6 +125,10 @@ opts = {
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
       exit_cmd = "q(save='no')",
+      paste_cmd = {
+        start = "```{r}",
+        end_marker = "```",
+      },
     },
     lua = {
       name = "Lua",
@@ -143,9 +152,18 @@ opts = {
       inspect_variable_cmd = "echo $",
       exit_cmd = "exit",
     },
+    julia = {
+      name = "Julia",
+      cmd = "julia",
+      paste_cmd = {
+        start = "#=#",
+        end_marker = "#=#",
+      },
+      exit_cmd = "exit()",
+    },
   },
 }
-```
+````
 
 ## Contributing
 

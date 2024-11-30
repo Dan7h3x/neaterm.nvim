@@ -32,59 +32,21 @@ function Neaterm:setup_repl()
   self:setup_repl_configs()
 end
 
-function Neaterm:setup_keymaps()
-  if self.opts.disable_default_keymaps then
-    vim.notify("Default keymaps disabled. Use :Neaterm* commands or set your own keymaps.", vim.log.levels.INFO)
-    return
-  end
-
+function Neaterm:setup_keymaps(keymaps)
   local opts = { noremap = true, silent = true }
-  local maps = {
-    -- Terminal management
-    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,                        desc = "Toggle terminal" },
-    { key = self.opts.keymaps.new_vertical,     func = function() self:create_terminal({ type = 'vertical' }) end,   desc = "Create vertical terminal" },
-    { key = self.opts.keymaps.new_horizontal,   func = function() self:create_terminal({ type = 'horizontal' }) end, desc = "Create horizontal terminal" },
-    { key = self.opts.keymaps.new_float,        func = function() self:create_terminal({ type = 'float' }) end,      desc = "Create floating terminal" },
-    { key = self.opts.keymaps.close,            func = function() self:close_current_terminal() end,                 desc = "Close current terminal" },
 
-    -- Terminal navigation
-    { key = self.opts.keymaps.next,             func = function() self:next_terminal() end,                          desc = "Next terminal" },
-    { key = self.opts.keymaps.prev,             func = function() self:prev_terminal() end,                          desc = "Previous terminal" },
-
-    -- Terminal movement
-    { key = self.opts.keymaps.move_up,          func = function() self:move_terminal('up') end,                      desc = "Move terminal up" },
-    { key = self.opts.keymaps.move_down,        func = function() self:move_terminal('down') end,                    desc = "Move terminal down" },
-    { key = self.opts.keymaps.move_left,        func = function() self:move_terminal('left') end,                    desc = "Move terminal left" },
-    { key = self.opts.keymaps.move_right,       func = function() self:move_terminal('right') end,                   desc = "Move terminal right" },
-
-    -- Terminal resizing
-    { key = self.opts.keymaps.resize_up,        func = function() self:resize_terminal('up') end,                    desc = "Resize terminal up" },
-    { key = self.opts.keymaps.resize_down,      func = function() self:resize_terminal('down') end,                  desc = "Resize terminal down" },
-    { key = self.opts.keymaps.resize_left,      func = function() self:resize_terminal('left') end,                  desc = "Resize terminal left" },
-    { key = self.opts.keymaps.resize_right,     func = function() self:resize_terminal('right') end,                 desc = "Resize terminal right" },
-
-    -- REPL operations
-    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,                         desc = "Toggle REPL menu" },
-    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,                      desc = "Send line to REPL" },
-    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end,                    desc = "Send buffer to REPL" },
-    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,                             desc = "Clear REPL" },
-    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,                           desc = "Show REPL history" },
-    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,                         desc = "Show REPL variables" },
-    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,                           desc = "Restart REPL" },
-
-    -- Bar operations
-    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,                              desc = "Focus bar" },
-  }
-
-  -- Set normal mode mappings with descriptions
-  for _, map in ipairs(maps) do
-    vim.keymap.set('n', map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+  for _, map in pairs(keymaps) do
+    if map.enabled then
+      vim.keymap.set('n', map.key, function() self:toggle_terminal() end, opts)
+    end
   end
 
-  -- Set visual mode mapping for REPL selection
-  vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
-    self:send_selection_to_repl()
-  end, vim.tbl_extend('force', opts, { desc = "Send selection to REPL" }))
+  -- Additional keymaps for visual mode, etc.
+  if keymaps.repl_send_selection.enabled then
+    vim.keymap.set('v', keymaps.repl_send_selection.key, function()
+      self:send_selection_to_repl()
+    end, opts)
+  end
 end
 
 -- Terminal Management Methods
@@ -1159,86 +1121,6 @@ function Neaterm:setup_features()
     silent = true,
     desc = self.opts.keymaps.terminal_picker.desc
   })
-end
-
--- Add auto-detection of REPL type
-function Neaterm:detect_repl_type()
-  local ft = vim.bo.filetype
-  if self.opts.repl_configs[ft] then
-    return ft
-  end
-  
-  -- Try to detect based on file extension
-  local filename = vim.fn.expand('%:t')
-  local ext = vim.fn.fnamemodify(filename, ':e')
-  local ext_to_repl = {
-    py = 'python',
-    r = 'r',
-    jl = 'julia',
-    js = 'node',
-    lua = 'lua',
-    sh = 'sh',
-  }
-  
-  return ext_to_repl[ext]
-end
-
--- Add smart REPL startup
-function Neaterm:smart_start_repl()
-  local repl_type = self:detect_repl_type()
-  if repl_type and self.opts.repl_configs[repl_type] then
-    self:start_repl({
-      filetype = repl_type,
-      cmd = self.opts.repl_configs[repl_type].cmd,
-      type = 'float'
-    })
-  else
-    vim.notify("Could not detect appropriate REPL type", vim.log.levels.WARN)
-  end
-end
-
--- Add REPL environment management
-function Neaterm:save_repl_environment()
-  if not self.current_repl then return end
-  
-  local config = self.repl_configs[self.current_repl.filetype]
-  if not config or not config.get_variables_cmd then return end
-  
-  -- Capture current environment
-  self:send_text(config.get_variables_cmd)
-  -- Save to file
-  local env_file = string.format(
-    "%s/neaterm_%s_env.json",
-    vim.fn.stdpath('data'),
-    self.current_repl.filetype
-  )
-  
-  -- Environment will be captured and saved asynchronously
-  self:capture_variables_async()
-end
-
--- Add REPL session restoration
-function Neaterm:restore_repl_environment()
-  if not self.current_repl then return end
-  
-  local env_file = string.format(
-    "%s/neaterm_%s_env.json",
-    vim.fn.stdpath('data'),
-    self.current_repl.filetype
-  )
-  
-  if vim.fn.filereadable(env_file) == 1 then
-    local content = vim.fn.readfile(env_file)
-    local ok, vars = pcall(vim.json.decode, table.concat(content, '\n'))
-    if ok and vars then
-      -- Restore variables
-      for _, var in ipairs(vars) do
-        if var.value then
-          self:send_text(string.format("%s = %s", var.name, var.value))
-        end
-      end
-    end
-  end
 end
 
 return Neaterm
