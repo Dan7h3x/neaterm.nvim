@@ -48,6 +48,7 @@ local default_opts = {
     repl_variables = '<leader>rv',
     repl_restart = '<leader>rR',
   },
+  disable_default_keymaps = false,
 
   -- REPL configurations
   repl = {

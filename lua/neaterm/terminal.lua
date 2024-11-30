@@ -117,14 +117,18 @@ function Neaterm:setup_keymaps()
     { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,                              desc = "Focus bar" },
   }
 
-  -- Set normal mode mappings
-  for _, map in ipairs(maps) do
-    vim.keymap.set('n', map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+  if self.opts.disable_default_keymaps then
+    return
+  else
+    -- Set normal mode mappings
+    for _, map in ipairs(maps) do
+      vim.keymap.set('n', map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+    end
+    -- Set visual mode mapping for REPL selection
+    vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
+      self:send_selection_to_repl()
+    end, opts)
   end
-  -- Set visual mode mapping for REPL selection
-  vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
-    self:send_selection_to_repl()
-  end, opts)
 end
 
 -- Terminal Management Methods
@@ -187,70 +191,6 @@ function Neaterm:create_terminal(opts)
   vim.cmd('startinsert')
 
   return buf
-end
-
-function Neaterm:setup_terminal_settings(win, buf, terminal_info)
-  if not buf or not api.nvim_buf_is_valid(buf) then return end
-
-  local term_mode_maps = {
-    ['<ESC><ESC>'] = {
-      cmd = '<C-\\><C-n>',
-      desc = 'Terminal: Exit insert mode'
-    },
-    ['<C-h>'] = {
-      cmd = '<C-\\><C-n><C-w>h',
-      desc = 'Terminal: Focus left window'
-    },
-    ['<C-j>'] = {
-      cmd = '<C-\\><C-n><C-w>j',
-      desc = 'Terminal: Focus down window'
-    },
-    ['<C-k>'] = {
-      cmd = '<C-\\><C-n><C-w>k',
-      desc = 'Terminal: Focus up window'
-    },
-    ['<C-l>'] = {
-      cmd = '<C-\\><C-n><C-w>l',
-      desc = 'Terminal: Focus right window'
-    },
-    ['<C-w>'] = {
-      cmd = '<C-\\><C-n><C-w>',
-      desc = 'Terminal: Window command prefix'
-    },
-  }
-
-  for lhs, map in pairs(term_mode_maps) do
-    vim.keymap.set('t', lhs, map.cmd, {
-      buffer = buf,
-      silent = true,
-      desc = map.desc
-    })
-  end
-
-  -- Auto-enter insert mode on terminal focus
-  api.nvim_create_autocmd("BufEnter", {
-    buffer = buf,
-    callback = function()
-      if vim.bo[buf].buftype == 'terminal' then
-        vim.cmd('startinsert')
-      end
-    end,
-    desc = "Terminal: Auto-enter insert mode"
-  })
-
-  -- Set terminal title if available
-  if terminal_info and terminal_info.cmd then
-    local title = terminal_info.cmd:match("([^/]+)$") or "terminal"
-    api.nvim_buf_set_name(buf, string.format("term://%s", title))
-  end
-
-  -- Set window options
-  if win and api.nvim_win_is_valid(win) then
-    api.nvim_win_set_option(win, 'number', false)
-    api.nvim_win_set_option(win, 'relativenumber', false)
-    api.nvim_win_set_option(win, 'signcolumn', 'no')
-    api.nvim_win_set_option(win, 'wrap', false)
-  end
 end
 
 -- REPL Management Methods
@@ -790,30 +730,30 @@ function Neaterm:setup_terminal_settings(win, buf)
       cmd = '<C-\\><C-n>',
       desc = 'Exit terminal insert mode'
     },
-    ['<C-\\><C-n>'] = {
-      cmd = '<Cmd>startinsert<CR>',
-      desc = 'Enter terminal insert mode'
-    },
-    ['<C-h>'] = {
-      cmd = '<Cmd>wincmd h<CR>',
-      desc = 'Move to left window'
-    },
-    ['<C-j>'] = {
-      cmd = '<Cmd>wincmd j<CR>',
-      desc = 'Move to bottom window'
-    },
-    ['<C-k>'] = {
-      cmd = '<Cmd>wincmd k<CR>',
-      desc = 'Move to top window'
-    },
-    ['<C-l>'] = {
-      cmd = '<Cmd>wincmd l<CR>',
-      desc = 'Move to right window'
-    },
-    ['<C-w>'] = {
-      cmd = '<C-\\><C-n><C-w>',
-      desc = 'Window command prefix'
-    }
+    -- ['<C-\\><C-n>'] = {
+    --   cmd = '<Cmd>startinsert<CR>',
+    --   desc = 'Enter terminal insert mode'
+    -- },
+    -- ['<C-h>'] = {
+    --   cmd = '<Cmd>wincmd h<CR>',
+    --   desc = 'Move to left window'
+    -- },
+    -- ['<C-j>'] = {
+    --   cmd = '<Cmd>wincmd j<CR>',
+    --   desc = 'Move to bottom window'
+    -- },
+    -- ['<C-k>'] = {
+    --   cmd = '<Cmd>wincmd k<CR>',
+    --   desc = 'Move to top window'
+    -- },
+    -- ['<C-l>'] = {
+    --   cmd = '<Cmd>wincmd l<CR>',
+    --   desc = 'Move to right window'
+    -- },
+    -- ['<C-w>'] = {
+    --   cmd = '<C-\\><C-n><C-w>',
+    --   desc = 'Window command prefix'
+    -- }
   }
 
   for lhs, map in pairs(term_maps) do
@@ -835,12 +775,6 @@ function Neaterm:setup_terminal_settings(win, buf)
     end,
     desc = "Auto-enter insert mode in terminal"
   })
-
-  -- Add terminal title
-  -- if term.cmd then
-  --   local title = term.cmd:match("([^/]+)$") or "terminal"
-  --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
-  -- end
 end
 
 -- Add navigation methods
