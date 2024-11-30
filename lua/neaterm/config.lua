@@ -107,6 +107,20 @@ local default_opts = {
       exit_cmd = "exit",
     },
   },
+
+  -- Performance options
+  update_interval = 50,  -- Milliseconds between UI updates
+  max_scrollback = 10000, -- Maximum terminal scrollback
+  
+  -- VSCode features
+  enable_vscode_features = true,
+  
+  -- Keymap control
+  disable_keymaps = false,
+  
+  -- REPL improvements
+  smart_paste = true,
+  paste_timeout = 100,
 }
 
 ---@param user_opts? table

@@ -33,6 +33,9 @@ function Neaterm:setup_repl()
 end
 
 function Neaterm:setup_keymaps()
+  -- Skip if keymaps are disabled
+  if self.opts.disable_keymaps then return end
+
   local opts = { noremap = true, silent = true }
   local maps = {
     -- Basic terminal operations
@@ -115,15 +118,54 @@ function Neaterm:setup_keymaps()
     { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,           desc = "Focus bar",           mode = { 'n' } },
   }
 
+  -- Store keymap references for later disable/enable
+  self.active_keymaps = {}
+
   -- Set normal mode mappings
   for _, map in ipairs(maps) do
-    vim.keymap.set(map.mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+    for _, mode in ipairs(map.mode) do
+      local keymap_id = mode .. map.key
+      self.active_keymaps[keymap_id] = {
+        mode = mode,
+        key = map.key,
+        func = map.func,
+        opts = vim.tbl_extend('force', opts, { desc = map.desc })
+      }
+      vim.keymap.set(mode, map.key, map.func, self.active_keymaps[keymap_id].opts)
+    end
   end
 
   -- Set visual mode mapping for REPL selection
-  vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
-    self:send_selection_to_repl()
-  end, opts)
+  local v_keymap_id = 'v' .. self.opts.keymaps.repl_send_selection
+  self.active_keymaps[v_keymap_id] = {
+    mode = 'v',
+    key = self.opts.keymaps.repl_send_selection,
+    func = function() self:send_selection_to_repl() end,
+    opts = opts
+  }
+  vim.keymap.set('v', self.opts.keymaps.repl_send_selection, 
+    self.active_keymaps[v_keymap_id].func, 
+    self.active_keymaps[v_keymap_id].opts)
+end
+
+-- Add methods to enable/disable keymaps
+function Neaterm:disable_keymaps()
+  if not self.active_keymaps then return end
+  
+  for _, keymap in pairs(self.active_keymaps) do
+    pcall(vim.keymap.del, keymap.mode, keymap.key)
+  end
+end
+
+function Neaterm:enable_keymaps()
+  if not self.active_keymaps then
+    self:setup_keymaps()
+    return
+  end
+
+  for _, keymap in pairs(self.active_keymaps) do
+    vim.keymap.set(keymap.mode, keymap.key, keymap.func, keymap.opts)
+  end
 end
 
 -- Terminal Management Methods
@@ -1268,6 +1310,146 @@ function Neaterm:setup_features()
     silent = true,
     desc = self.opts.keymaps.terminal_picker.desc
   })
+end
+
+-- Improve REPL sending with better paste handling
+function Neaterm:send_text_to_repl(text, opts)
+  opts = opts or {}
+  if not self.current_repl then return end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config then return end
+
+  -- Use specialized paste commands for different REPLs
+  local paste_commands = {
+    python = {
+      start = "%paste",
+      end_marker = "--",
+      clipboard = true
+    },
+    r = {
+      start = "writeClipboard()",
+      clipboard = true
+    },
+    julia = {
+      start = "]paste",
+      end_marker = "^C",
+    }
+  }
+
+  local paste_config = paste_commands[self.current_repl.filetype]
+  
+  if paste_config then
+    if paste_config.clipboard then
+      -- Use system clipboard for transfer
+      local old_clip = vim.fn.getreg('+')
+      vim.fn.setreg('+', text)
+      
+      -- Send paste command
+      self:send_text(paste_config.start)
+      
+      -- Restore clipboard after brief delay
+      vim.defer_fn(function()
+        vim.fn.setreg('+', old_clip)
+      end, 100)
+    else
+      -- Use direct paste with markers
+      self:send_text(paste_config.start)
+      self:send_text(text)
+      if paste_config.end_marker then
+        self:send_text(paste_config.end_marker)
+      end
+    end
+  else
+    -- Fallback to direct sending
+    self:send_text(text)
+  end
+end
+
+-- VSCode-like features
+function Neaterm:setup_vscode_features()
+  -- Terminal search
+  vim.keymap.set('t', '<C-f>', function()
+    local term_buf = self.current_terminal
+    if not term_buf then return end
+    
+    -- Create search UI
+    local search_buf = vim.api.nvim_create_buf(false, true)
+    local search_win = vim.api.nvim_open_win(search_buf, true, {
+      relative = 'editor',
+      width = 30,
+      height = 1,
+      row = 1,
+      col = vim.o.columns - 31,
+      style = 'minimal',
+      border = 'single'
+    })
+
+    -- Setup search logic
+    local function do_search()
+      local pattern = vim.fn.getline('.')
+      -- Implement terminal buffer search
+    end
+
+    -- Search window autocmds
+    vim.api.nvim_create_autocmd("BufLeave", {
+      buffer = search_buf,
+      callback = function()
+        vim.api.nvim_win_close(search_win, true)
+        vim.api.nvim_buf_delete(search_buf, { force = true })
+      end
+    })
+  end, { noremap = true, silent = true })
+
+  -- Terminal split/unsplit
+  self.split_terminal = nil
+  vim.keymap.set('t', '<C-\\><C-\\>', function()
+    if not self.split_terminal then
+      -- Store current terminal
+      self.split_terminal = self.current_terminal
+      -- Create split
+      self:create_terminal({ type = 'vertical' })
+    else
+      -- Restore single terminal
+      self:close_current_terminal()
+      self.split_terminal = nil
+    end
+  end, { noremap = true, silent = true })
+end
+
+-- Performance improvements
+function Neaterm:setup_performance()
+  -- Throttle UI updates
+  local update_timer = nil
+  function self:throttled_update()
+    if update_timer then
+      vim.fn.timer_stop(update_timer)
+    end
+    update_timer = vim.fn.timer_start(50, function()
+      require('neaterm.ui').update_bar(self)
+    end)
+  end
+
+  -- Buffer local autocommands
+  local function setup_buffer_autocmds(buf)
+    vim.api.nvim_create_autocmd({"BufEnter", "BufLeave", "WinEnter", "WinLeave"}, {
+      buffer = buf,
+      callback = function()
+        self:throttled_update()
+      end
+    })
+  end
+
+  -- Override create_terminal to use throttled updates
+  local original_create = self.create_terminal
+  self.create_terminal = function(self, opts)
+    local buf = original_create(self, opts)
+    if buf then
+      setup_buffer_autocmds(buf)
+    end
+    self:throttled_update()
+    return buf
+  end
 end
 
 return Neaterm
