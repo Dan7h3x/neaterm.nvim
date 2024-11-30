@@ -51,82 +51,6 @@ local default_opts = {
     repl_restart = { key = '<leader>rR', enabled = true },
   },
   disable_default_keymaps = false,
-
-  -- REPL configurations
-  repl = {
-    float_width = 0.6,
-    float_height = 0.4,
-    save_history = true,
-    history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
-    max_history = 100,
-    update_interval = 5000,
-  },
-
-  -- REPL language configurations
-  repl_configs = {
-    python = {
-      name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors='Linux'",
-      startup_cmds = {
-        "import sys",
-        "sys.ps1 = 'In []: '",
-        "sys.ps2 = '   ....: '",
-      },
-      get_variables_cmd = "whos",
-      inspect_variable_cmd = "?",
-      exit_cmd = "exit()",
-      paste_cmd = {
-        start = "%paste",
-        end_marker = "--", -- IPython will automatically handle the paste
-      },
-    },
-    r = {
-      name = "R (Radian)",
-      cmd = "radian",
-      startup_cmds = {
-        "options(width = 80)",
-        "options(prompt = 'R> ')",
-      },
-      get_variables_cmd = "ls.str()",
-      inspect_variable_cmd = "str(",
-      exit_cmd = "q(save='no')",
-      paste_cmd = {
-        start = "```{r}",
-        end_marker = "```",
-      },
-    },
-    lua = {
-      name = "Lua",
-      cmd = "lua",
-      exit_cmd = "os.exit()",
-    },
-    node = {
-      name = "Node.js",
-      cmd = "node",
-      get_variables_cmd = "Object.keys(global)",
-      exit_cmd = ".exit",
-    },
-    sh = {
-      name = "Shell",
-      cmd = vim.o.shell,
-      startup_cmds = {
-        "PS1='$ '",
-        "TERM=xterm-256color",
-      },
-      get_variables_cmd = "set",
-      inspect_variable_cmd = "echo $",
-      exit_cmd = "exit",
-    },
-    julia = {
-      name = "Julia",
-      cmd = "julia",
-      paste_cmd = {
-        start = "#=#",
-        end_marker = "#=#",
-      },
-      exit_cmd = "exit()",
-    },
-  },
 }
 
 ---@param user_opts? table
@@ -135,47 +59,8 @@ function M.setup(user_opts)
   -- Ensure user_opts is a table
   user_opts = user_opts or {}
 
-  -- Deep copy of default options
-  local opts = vim.deepcopy(default_opts)
-
-  -- Merge user options
-  opts = vim.tbl_deep_extend("force", default_opts, user_opts)
-  local Neaterm = require('neaterm.terminal')
-  local neaterm = Neaterm.new(opts)
-
-  -- Setup keymaps
-  neaterm:setup_keymaps(opts.keymaps)
-
-  return neaterm
+  -- Merge user options with defaults
+  return vim.tbl_deep_extend("force", default_opts, user_opts)
 end
-
--- Configuration for lazy.nvim
-M.lazy = {
-  'Dan7h3x/neaterm.nvim',
-  event = 'VeryLazy',
-  keys = {
-    { '<A-t>',      desc = 'Toggle terminal' },
-    { '<C-\\>',     desc = 'New vertical terminal' },
-    { '<C-.>',      desc = 'New horizontal terminal' },
-    { '<C-A-t>',    desc = 'New floating terminal' },
-    { '<leader>rt', desc = 'Toggle REPL menu' },
-    { '<leader>rl', desc = 'Send line to REPL' },
-    { '<leader>rs', mode = 'v',                      desc = 'Send selection to REPL' },
-    { '<leader>rb', desc = 'Send buffer to REPL' },
-  },
-  opts = {
-    -- User can override default options here
-    -- Example:
-    -- float_width = 0.7,
-    -- float_height = 0.5,
-  },
-  config = function(_, opts)
-    require('neaterm').setup(opts)
-  end,
-  dependencies = {
-    'nvim-lua/plenary.nvim',
-    'ibhagwan/fzf-lua',
-  },
-}
 
 return M
