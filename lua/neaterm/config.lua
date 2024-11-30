@@ -73,6 +73,10 @@ local default_opts = {
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
       exit_cmd = "exit()",
+      paste_cmd = {
+        start = "%paste",
+        end_marker = "--", -- IPython will automatically handle the paste
+      },
     },
     r = {
       name = "R (Radian)",
@@ -84,6 +88,10 @@ local default_opts = {
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
       exit_cmd = "q(save='no')",
+      paste_cmd = {
+        start = "```{r}",
+        end_marker = "```",
+      },
     },
     lua = {
       name = "Lua",
@@ -106,6 +114,15 @@ local default_opts = {
       get_variables_cmd = "set",
       inspect_variable_cmd = "echo $",
       exit_cmd = "exit",
+    },
+    julia = {
+      name = "Julia",
+      cmd = "julia",
+      paste_cmd = {
+        start = "#=#",
+        end_marker = "#=#",
+      },
+      exit_cmd = "exit()",
     },
   },
 }
