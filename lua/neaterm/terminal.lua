@@ -133,18 +133,48 @@ end
 -- Terminal Management Methods
 function Neaterm:create_terminal(opts)
   opts = opts or {}
-  local buf = api.nvim_create_buf(false, true)
+  
+  -- Validate terminal configuration
+  if opts.cmd and type(opts.cmd) ~= "string" then
+    vim.notify("Terminal command must be a string", vim.log.levels.ERROR)
+    return nil
+  end
 
-  -- Set buffer options
-  api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
-  api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-  api.nvim_buf_set_option(buf, 'buflisted', false)
+  -- Create buffer with error handling
+  local ok, buf = pcall(api.nvim_create_buf, false, true)
+  if not ok then
+    vim.notify("Failed to create terminal buffer: " .. buf, vim.log.levels.ERROR)
+    return nil
+  end
 
+  -- Set buffer options safely
+  pcall(api.nvim_buf_set_option, buf, 'filetype', 'neaterm')
+  pcall(api.nvim_buf_set_option, buf, 'bufhidden', 'wipe')
+  pcall(api.nvim_buf_set_option, buf, 'buflisted', false)
+
+  -- Create window with error handling
   local win = utils.create_window(self.opts, opts, buf)
+  if not win then
+    pcall(api.nvim_buf_delete, buf, { force = true })
+    vim.notify("Failed to create terminal window", vim.log.levels.ERROR)
+    return nil
+  end
+
+  -- Start terminal with error handling
   local term_id = fn.termopen(opts.cmd or self.opts.shell, {
     on_exit = function(_, code)
       vim.schedule(function()
+        -- Handle terminal exit
         if api.nvim_buf_is_valid(buf) then
+          -- Execute custom on_exit handler if provided
+          if opts.on_exit then
+            local success, err = pcall(opts.on_exit, code)
+            if not success then
+              vim.notify("Terminal exit handler failed: " .. err, vim.log.levels.ERROR)
+            end
+          end
+
+          -- Cleanup terminal
           self.terminals[buf] = nil
           if self.current_terminal == buf then
             self.current_terminal = nil
@@ -152,11 +182,17 @@ function Neaterm:create_terminal(opts)
           if self.current_repl and self.current_repl.buf == buf then
             self.current_repl = nil
           end
+          
+          -- Close window safely
           if win and api.nvim_win_is_valid(win) then
             pcall(api.nvim_win_close, win, true)
           end
+          
+          -- Delete buffer safely
           pcall(api.nvim_buf_delete, buf, { force = true })
         end
+        
+        -- Update UI
         ui.update_bar(self)
       end)
     end
@@ -164,37 +200,63 @@ function Neaterm:create_terminal(opts)
 
   if term_id <= 0 then
     pcall(api.nvim_buf_delete, buf, { force = true })
-    vim.notify("Failed to create terminal", vim.log.levels.ERROR)
+    vim.notify("Failed to create terminal: Command not found or failed to start", vim.log.levels.ERROR)
     return nil
   end
 
-  -- Store terminal info
+  -- Store terminal info with validation
   local terminal_info = {
     window = win,
     job_id = term_id,
     type = opts.type,
-    cmd = opts.cmd or self.opts.shell
+    cmd = opts.cmd or self.opts.shell,
+    keymaps = opts.keymaps,
   }
   self.terminals[buf] = terminal_info
 
-  -- Setup terminal settings with the terminal info
-  self:setup_terminal_settings(win, buf, terminal_info)
+  -- Setup terminal settings safely
+  local setup_ok, setup_err = pcall(self.setup_terminal_settings, self, win, buf, terminal_info)
+  if not setup_ok then
+    vim.notify("Failed to setup terminal settings: " .. setup_err, vim.log.levels.WARN)
+  end
 
   -- Set as current terminal
   self.current_terminal = buf
 
-  -- Update UI
-  ui.update_bar(self)
+  -- Update UI safely
+  pcall(ui.update_bar, self)
 
-  -- Enter insert mode
-  vim.cmd('startinsert')
+  -- Enter insert mode safely
+  vim.schedule(function()
+    if api.nvim_buf_is_valid(buf) then
+      vim.cmd('startinsert')
+    end
+  end)
 
   return buf
 end
 
+-- Add validation for terminal settings
 function Neaterm:setup_terminal_settings(win, buf, terminal_info)
-  if not buf or not api.nvim_buf_is_valid(buf) then return end
+  if not buf or not api.nvim_buf_is_valid(buf) then 
+    return 
+  end
 
+  -- Setup terminal-specific keymaps if provided
+  if terminal_info and terminal_info.keymaps then
+    for key, action in pairs(terminal_info.keymaps) do
+      local success, err = pcall(vim.keymap.set, 't', key, action, {
+        buffer = buf,
+        silent = true,
+        desc = string.format("Terminal action: %s", key)
+      })
+      if not success then
+        vim.notify(string.format("Failed to set terminal keymap %s: %s", key, err), vim.log.levels.WARN)
+      end
+    end
+  end
+
+  -- Default terminal keymaps with error handling
   local term_mode_maps = {
     ['<ESC><ESC>'] = {
       cmd = '<C-\\><C-n>',
@@ -207,36 +269,40 @@ function Neaterm:setup_terminal_settings(win, buf, terminal_info)
   }
 
   for lhs, map in pairs(term_mode_maps) do
-    vim.keymap.set('t', lhs, map.cmd, {
+    pcall(vim.keymap.set, 't', lhs, map.cmd, {
       buffer = buf,
       silent = true,
       desc = map.desc
     })
   end
 
-  -- Auto-enter insert mode on terminal focus
-  api.nvim_create_autocmd("BufEnter", {
-    buffer = buf,
-    callback = function()
-      if vim.bo[buf].buftype == 'terminal' then
-        vim.cmd('startinsert')
-      end
-    end,
-    desc = "Terminal: Auto-enter insert mode"
-  })
+  -- Setup auto-insert with error handling
+  if self.opts.features.auto_insert then
+    local group = api.nvim_create_augroup("NeatermAutoInsert" .. buf, { clear = true })
+    pcall(api.nvim_create_autocmd, "BufEnter", {
+      buffer = buf,
+      group = group,
+      callback = function()
+        if vim.bo[buf].buftype == 'terminal' then
+          vim.cmd('startinsert')
+        end
+      end,
+      desc = "Terminal: Auto-enter insert mode"
+    })
+  end
 
-  -- -- Set terminal title if available
-  -- if terminal_info and terminal_info.cmd then
-  --   local title = terminal_info.cmd:match("([^/]+)$") or "terminal"
-  --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
-  -- end
-
-  -- Set window options
+  -- Set window options safely
   if win and api.nvim_win_is_valid(win) then
-    api.nvim_win_set_option(win, 'number', false)
-    api.nvim_win_set_option(win, 'relativenumber', false)
-    api.nvim_win_set_option(win, 'signcolumn', 'no')
-    api.nvim_win_set_option(win, 'wrap', false)
+    local win_opts = {
+      number = false,
+      relativenumber = false,
+      signcolumn = 'no',
+      wrap = false,
+    }
+    
+    for opt, value in pairs(win_opts) do
+      pcall(api.nvim_win_set_option, win, opt, value)
+    end
   end
 end
 

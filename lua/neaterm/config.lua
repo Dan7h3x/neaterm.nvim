@@ -38,8 +38,8 @@ local default_opts = {
         if selected_file then
           vim.cmd('edit ' .. selected_file)
         end
+      end
       },
-    },
     lazygit = {
       name = "LazyGit",
       cmd = "lazygit",
