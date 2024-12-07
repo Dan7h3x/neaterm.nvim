@@ -124,7 +124,7 @@ function Neaterm:create_terminal(term_opts)
   term_opts = vim.tbl_deep_extend('keep', term_opts or {}, {
     type = 'float',
     cmd = self.opts.shell,
-    env = vim.empty_dict(), -- Fix: Use empty_dict() for env
+    env = vim.empty_dict(),
     cwd = vim.fn.getcwd(),
   })
 
@@ -150,11 +150,8 @@ function Neaterm:create_terminal(term_opts)
   local term_config = {
     cwd = term_opts.cwd,
     on_exit = function()
-      -- Don't immediately delete the buffer/window
       if vim.api.nvim_buf_is_valid(buf) then
-        -- Keep the buffer but clear its content
         vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
-        -- Optionally notify the user
         vim.notify("Terminal process exited", vim.log.levels.INFO)
       end
     end
@@ -192,7 +189,7 @@ function Neaterm:create_terminal(term_opts)
     self:setup_terminal_keymaps(buf)
   end
 
-  -- Always setup essential terminal keymaps (even when default keymaps are disabled)
+  -- Always setup essential terminal keymaps
   self:setup_essential_terminal_keymaps(buf)
 
   -- Update UI
@@ -201,8 +198,10 @@ function Neaterm:create_terminal(term_opts)
   return buf
 end
 
--- New method for essential terminal keymaps
+-- Essential terminal keymaps that are always set
 function Neaterm:setup_essential_terminal_keymaps(buf)
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then return end
+  
   local opts = { buffer = buf, silent = true }
   
   -- Essential keymaps that should always work
@@ -213,6 +212,12 @@ function Neaterm:setup_essential_terminal_keymaps(buf)
     end
     self:close_current_terminal()
   end, opts)
+
+  -- Window navigation from terminal
+  vim.keymap.set('t', '<C-w>h', '<C-\\><C-n><C-w>h', opts)
+  vim.keymap.set('t', '<C-w>j', '<C-\\><C-n><C-w>j', opts)
+  vim.keymap.set('t', '<C-w>k', '<C-\\><C-n><C-w>k', opts)
+  vim.keymap.set('t', '<C-w>l', '<C-\\><C-n><C-w>l', opts)
 end
 
 -- Improved paste handling
@@ -1518,6 +1523,67 @@ function Neaterm:restart_repl()
   vim.defer_fn(function()
     self:start_repl(current_config)
   end, 100)
+end
+
+function Neaterm:setup_terminal_keymaps(buf)
+  if not buf or not vim.api.nvim_buf_is_valid(buf) then return end
+
+  local opts = { buffer = buf, silent = true }
+  
+  -- Terminal mode mappings
+  local term_maps = {
+    -- Basic operations
+    { mode = 't', key = self.opts.keymaps.toggle, func = function() self:toggle_terminal() end, desc = "Toggle terminal" },
+    { mode = 't', key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close terminal" },
+    
+    -- Navigation
+    { mode = 't', key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal" },
+    { mode = 't', key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal" },
+    
+    -- Movement
+    { mode = 't', key = self.opts.keymaps.move_up, func = function() self:move_terminal('up') end, desc = "Move up" },
+    { mode = 't', key = self.opts.keymaps.move_down, func = function() self:move_terminal('down') end, desc = "Move down" },
+    { mode = 't', key = self.opts.keymaps.move_left, func = function() self:move_terminal('left') end, desc = "Move left" },
+    { mode = 't', key = self.opts.keymaps.move_right, func = function() self:move_terminal('right') end, desc = "Move right" },
+    
+    -- Resizing
+    { mode = 't', key = self.opts.keymaps.resize_up, func = function() self:resize_terminal('up') end, desc = "Resize up" },
+    { mode = 't', key = self.opts.keymaps.resize_down, func = function() self:resize_terminal('down') end, desc = "Resize down" },
+    { mode = 't', key = self.opts.keymaps.resize_left, func = function() self:resize_terminal('left') end, desc = "Resize left" },
+    { mode = 't', key = self.opts.keymaps.resize_right, func = function() self:resize_terminal('right') end, desc = "Resize right" },
+  }
+
+  -- Set terminal mode mappings
+  for _, map in ipairs(term_maps) do
+    vim.keymap.set(map.mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+  end
+
+  -- Normal mode mappings for terminal buffer
+  local normal_maps = {
+    -- Basic operations
+    { mode = 'n', key = self.opts.keymaps.toggle, func = function() self:toggle_terminal() end, desc = "Toggle terminal" },
+    { mode = 'n', key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close terminal" },
+    
+    -- Navigation
+    { mode = 'n', key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal" },
+    { mode = 'n', key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal" },
+  }
+
+  -- Set normal mode mappings
+  for _, map in ipairs(normal_maps) do
+    vim.keymap.set(map.mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+  end
+
+  -- Auto-enter insert mode on terminal focus
+  vim.api.nvim_create_autocmd("BufEnter", {
+    buffer = buf,
+    callback = function()
+      if vim.bo[buf].buftype == 'terminal' then
+        vim.cmd('startinsert')
+      end
+    end,
+    desc = "Auto-enter insert mode in terminal"
+  })
 end
 
 return Neaterm
