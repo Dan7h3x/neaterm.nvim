@@ -21,13 +21,60 @@ local default_opts = {
   min_width = 20,
   min_height = 3,
 
+
+  -- custom terminals
+  terminals = {
+    ranger = {
+      name = "Ranger",
+      cmd = "ranger",
+      type = "float",
+      float_width = 0.8,
+      float_height = 0.8,
+      keymaps = {
+        quit = "q",
+        select = "<CR>",
+        preview = "p",
+      },
+      on_exit = function(selected_file)
+        if selected_file then
+          vim.cmd('edit ' .. selected_file)
+        end
+      end
+    },
+    lazygit = {
+      name = "LazyGit",
+      cmd = "lazygit",
+      type = "float",
+      float_width = 0.9,
+      float_height = 0.9,
+      keymaps = {
+        quit = "q",
+        commit = "c",
+        push = "P",
+      },
+    },
+    btop = {
+      name = "Btop",
+      cmd = "btop",
+      type = "float",
+      float_width = 0.8,
+      float_height = 0.8,
+      keymaps = {
+        quit = "q",
+        help = "h",
+      },
+    },
+
+  },
+
   -- Default keymaps
+  use_default_keymaps = true,
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
     new_horizontal = '<C-.>',
     new_float = '<C-A-t>',
-    close = '<C-d>',
+    close = '<A-d>',
     next = '<C-PageDown>',
     prev = '<C-PageUp>',
     move_up = '<C-A-Up>',
@@ -106,6 +153,18 @@ local default_opts = {
       inspect_variable_cmd = "echo $",
       exit_cmd = "exit",
     },
+  },
+
+  -- Terminal features
+  features = {
+    auto_insert = true,
+    auto_close = true,
+    restore_layout = true,
+    smart_sizing = true,
+    persistent_history = true,
+    native_search = true,
+    clipboard_sync = true,
+    shell_integration = true,
   },
 }
 
