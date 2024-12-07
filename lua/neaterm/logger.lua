@@ -1,5 +1,6 @@
 local api = vim.api
 local fn = vim.fn
+local uv = vim.loop
 
 ---@class Logger
 local Logger = {}
@@ -40,8 +41,9 @@ function Logger:init()
       fn.mkdir(log_dir, 'p')
     end
 
-    -- Rotate log file if it's too large
-    if fn.filesize(self.config.file) > self.config.max_size then
+    -- Check file size and rotate if needed
+    local stat = uv.fs_stat(self.config.file)
+    if stat and stat.size > self.config.max_size then
       self:rotate_log()
     end
   end
@@ -49,23 +51,19 @@ end
 
 function Logger:rotate_log()
   local backup = self.config.file .. '.old'
-  if fn.filereadable(self.config.file) == 1 then
-    -- Remove old backup if it exists
-    if fn.filereadable(backup) == 1 then
-      fn.delete(backup)
-    end
-    -- Rename current log to backup
-    fn.rename(self.config.file, backup)
-  end
+  -- Remove old backup if it exists
+  pcall(uv.fs_unlink, backup)
+  -- Rename current log to backup
+  pcall(uv.fs_rename, self.config.file, backup)
 end
 
----Format a log message
+---Format log message with timestamp
 ---@param level string
 ---@param msg string
 ---@return string
 function Logger:format_message(level, msg)
-  local time = os.date('%Y-%m-%d %H:%M:%S')
-  return string.format('[%s] [%s] %s', time, level, msg)
+  local timestamp = os.date('%Y-%m-%d %H:%M:%S')
+  return string.format('[%s] [%s] %s', timestamp, level, msg)
 end
 
 ---Write a message to the log
