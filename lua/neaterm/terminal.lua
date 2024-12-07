@@ -133,7 +133,7 @@ end
 -- Terminal Management Methods
 function Neaterm:create_terminal(opts)
   opts = opts or {}
-  
+
   -- Validate terminal configuration
   if opts.cmd and type(opts.cmd) ~= "string" then
     vim.notify("Terminal command must be a string", vim.log.levels.ERROR)
@@ -182,16 +182,16 @@ function Neaterm:create_terminal(opts)
           if self.current_repl and self.current_repl.buf == buf then
             self.current_repl = nil
           end
-          
+
           -- Close window safely
           if win and api.nvim_win_is_valid(win) then
             pcall(api.nvim_win_close, win, true)
           end
-          
+
           -- Delete buffer safely
           pcall(api.nvim_buf_delete, buf, { force = true })
         end
-        
+
         -- Update UI
         ui.update_bar(self)
       end)
@@ -238,8 +238,8 @@ end
 
 -- Add validation for terminal settings
 function Neaterm:setup_terminal_settings(win, buf, terminal_info)
-  if not buf or not api.nvim_buf_is_valid(buf) then 
-    return 
+  if not buf or not api.nvim_buf_is_valid(buf) then
+    return
   end
 
   -- Setup terminal-specific keymaps if provided
@@ -299,7 +299,7 @@ function Neaterm:setup_terminal_settings(win, buf, terminal_info)
       signcolumn = 'no',
       wrap = false,
     }
-    
+
     for opt, value in pairs(win_opts) do
       pcall(api.nvim_win_set_option, win, opt, value)
     end

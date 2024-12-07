@@ -27,6 +27,7 @@ local default_opts = {
     ranger = {
       name = "Ranger",
       cmd = "ranger",
+      type = "float",
       float_width = 0.8,
       float_height = 0.8,
       keymaps = {
@@ -39,7 +40,7 @@ local default_opts = {
           vim.cmd('edit ' .. selected_file)
         end
       end
-      },
+    },
     lazygit = {
       name = "LazyGit",
       cmd = "lazygit",
@@ -63,18 +64,7 @@ local default_opts = {
         help = "h",
       },
     },
-    k9s = {
-      name = "K9s",
-      cmd = "k9s",
-      type = "float",
-      float_width = 0.9,
-      float_height = 0.9,
-      keymaps = {
-        quit = "q",
-        describe = "d",
-        logs = "l",
-      },
-    },
+
   },
 
   -- Default keymaps

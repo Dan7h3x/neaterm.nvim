@@ -44,7 +44,7 @@ function M.create_user_commands(neaterm)
         local term_type = opts.fargs[1]
         local cmd = get_terminal_cmd(opts, term_type)
         local term_config = term_type and neaterm.opts.terminals[term_type] or {}
-        
+
         neaterm:create_terminal(vim.tbl_extend("force", {
           cmd = cmd,
           type = term_config.type or "float"
@@ -66,20 +66,17 @@ function M.create_user_commands(neaterm)
     },
     NeatermHorizontal = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'horizontal', cmd = opts.args or vim.o.shell
-        })
+        neaterm:create_terminal({ type = 'horizontal', cmd = get_terminal_cmd(opts) })
       end
     },
     NeatermFloat = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'float', cmd = opts.args or vim.o.shell
-        })
+        neaterm:create_terminal({ type = 'float', cmd = get_terminal_cmd(opts) })
       end
     },
     NeatermFull = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'full', cmd = opts.args or vim.o.shell
-        })
+        neaterm:create_terminal({ type = 'full', cmd = get_terminal_cmd(opts) })
       end
     },
     NeatermToggle = {
@@ -106,7 +103,7 @@ function M.create_user_commands(neaterm)
 
   -- Add commands for each custom terminal
   for term_name, term_config in pairs(neaterm.opts.terminals) do
-    local cmd_name = "Neaterm" .. term_name:gsub("^%l", string.upper)
+    local cmd_name = "Term_" .. term_name:gsub("^%l", string.upper)
     commands[cmd_name] = {
       callback = function(opts)
         neaterm:create_terminal(vim.tbl_extend("force", {
