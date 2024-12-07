@@ -1,153 +1,137 @@
 local api = vim.api
+local fn = vim.fn
+local logger = require('neaterm.logger')
 
 local M = {}
 
-function M.create_window(opts, term_opts, buf)
-  if not api.nvim_buf_is_valid(buf) then
-    vim.notify("Invalid buffer for window creation", vim.log.levels.ERROR)
+---Create a window based on configuration
+---@param opts table Global options
+---@param win_opts table Window-specific options
+---@param buf number Buffer number
+---@return number|nil window_id
+function M.create_window(opts, win_opts, buf)
+  local type = win_opts.type or opts.default_type
+  local win
+
+  if type == 'float' then
+    -- Calculate floating window size
+    local width = math.floor(vim.o.columns * (win_opts.float_width or opts.float_width))
+    local height = math.floor(vim.o.lines * (win_opts.float_height or opts.float_height))
+
+    -- Ensure minimum size
+    width = math.max(width, opts.min_width or 30)
+    height = math.max(height, opts.min_height or 10)
+
+    -- Create floating window
+    local config = {
+      relative = 'editor',
+      width = width,
+      height = height,
+      row = math.floor((vim.o.lines - height) / 2),
+      col = math.floor((vim.o.columns - width) / 2),
+      style = 'minimal',
+      border = opts.border,
+      title = win_opts.cmd and ' ' .. fn.fnamemodify(win_opts.cmd, ':t') .. ' ',
+      title_pos = 'center',
+    }
+
+    win = api.nvim_open_win(buf, true, config)
+  else
+    -- Create split window
+    local cmd = type == 'vertical' and 'vsplit' or 'split'
+    vim.cmd(cmd)
+    win = api.nvim_get_current_win()
+    api.nvim_win_set_buf(win, buf)
+  end
+
+  if not win then
+    logger:error("Failed to create window")
     return nil
   end
 
-  local win_opts = {
-    style = 'minimal',
-    border = opts.border
+  -- Set window options
+  local win_options = {
+    number = opts.show_number,
+    relativenumber = false,
+    wrap = false,
+    signcolumn = 'no',
   }
 
-  local function create_float_window()
-    win_opts.relative = 'editor'
-    win_opts.width = math.floor(vim.o.columns * (term_opts.float_width or opts.float_width))
-    win_opts.height = math.floor(vim.o.lines * (term_opts.float_height or opts.float_height))
-    win_opts.row = math.floor((vim.o.lines - win_opts.height) / 2)
-    win_opts.col = math.floor((vim.o.columns - win_opts.width) / 2)
-    
-    local ok, win = pcall(api.nvim_open_win, buf, true, win_opts)
-    if not ok then
-      vim.notify("Failed to create float window: " .. win, vim.log.levels.ERROR)
-      return nil
-    end
-    return win
+  for opt, value in pairs(win_options) do
+    api.nvim_win_set_option(win, opt, value)
   end
 
-  local function create_split_window(split_cmd)
-    local ok, _ = pcall(vim.cmd, split_cmd)
-    if not ok then
-      vim.notify("Failed to create split window", vim.log.levels.ERROR)
-      return nil
-    end
-    local win = api.nvim_get_current_win()
-    pcall(api.nvim_win_set_buf, win, buf)
-    return win
-  end
-
-  if term_opts.type == 'float' then
-    return create_float_window()
-  elseif term_opts.type == 'full' then
-    local ok, _ = pcall(vim.cmd, 'enew')
-    if not ok then
-      vim.notify("Failed to create full window", vim.log.levels.ERROR)
-      return nil
-    end
-    local win = api.nvim_get_current_win()
-    pcall(api.nvim_win_set_buf, win, buf)
-    return win
-  else
-    return create_split_window(term_opts.type == 'vertical' and 'vsplit' or 'split')
-  end
+  return win
 end
 
-function M.create_user_commands(neaterm)
-  local commands = {
-    NeatermVertical = {
-      callback = function(opts)
-        neaterm:create_terminal({ type = 'vertical', cmd = opts.args })
-      end
-    },
-    NeatermHorizontal = {
-      callback = function(opts)
-        neaterm:create_terminal({ type = 'horizontal', cmd = opts.args })
-      end
-    },
-    NeatermFloat = {
-      callback = function(opts)
-        neaterm:create_terminal({ type = 'float', cmd = opts.args })
-      end
-    },
-    NeatermFull = {
-      callback = function(opts)
-        neaterm:create_terminal({ type = 'full', cmd = opts.args })
-      end
-    },
-    NeatermToggle = {
-      callback = function()
-        neaterm:toggle_terminal()
-      end
-    },
-    NeatermREPL = {
-      callback = function()
-        neaterm:show_repl_menu()
-      end
-    },
-    NeatermHistory = {
-      callback = function()
-        neaterm:show_history()
-      end
-    },
-    NeatermVariables = {
-      callback = function()
-        neaterm:show_variables()
-      end
-    },
+---Update floating window position
+---@param win number Window handle
+---@param changes table Position changes
+function M.update_float_position(win, changes)
+  if not api.nvim_win_is_valid(win) then return end
+
+  local config = api.nvim_win_get_config(win)
+  if config.relative == '' then return end
+
+  -- Apply changes
+  local new_config = {
+    row = changes.row and (config.row[false] + changes.row) or config.row,
+    col = changes.col and (config.col[false] + changes.col) or config.col,
+    width = changes.width and (config.width + changes.width) or config.width,
+    height = changes.height and (config.height + changes.height) or config.height,
   }
 
-  for name, cmd in pairs(commands) do
-    api.nvim_create_user_command(name, cmd.callback, { nargs = '*' })
-  end
+  -- Ensure window stays within screen bounds
+  new_config.row = math.max(0, math.min(new_config.row, vim.o.lines - new_config.height - 1))
+  new_config.col = math.max(0, math.min(new_config.col, vim.o.columns - new_config.width - 1))
+
+  pcall(api.nvim_win_set_config, win, new_config)
 end
 
+---Setup filetype detection
 function M.setup_filetype_detection()
-  api.nvim_create_autocmd("FileType", {
-    pattern = "neaterm",
-    callback = function()
-      local opts = vim.opt_local
-      opts.number = false
-      opts.relativenumber = false
-      opts.signcolumn = "no"
-      opts.bufhidden = "hide"
-      opts.wrap = false
-    end
+  vim.filetype.add({
+    pattern = {
+      ['.*/neaterm/.*'] = 'neaterm',
+    },
   })
 end
 
+---Setup VimLeave autocmd
+---@param neaterm Neaterm
 function M.setup_vimleave_autocmd(neaterm)
-  api.nvim_create_autocmd("VimLeave", {
+  api.nvim_create_autocmd('VimLeavePre', {
     callback = function()
-      -- Save REPL history before exit
-      neaterm:save_repl_history()
-      -- Clean up terminals
+      -- Close all terminals
       for buf, _ in pairs(neaterm.terminals) do
-        if api.nvim_buf_is_valid(buf) then
-          api.nvim_buf_delete(buf, { force = true })
-        end
+        neaterm:close_terminal(buf)
       end
     end
   })
 end
 
+---Get visual selection
+---@return string
 function M.get_visual_selection()
-  local start_pos = vim.fn.getpos("'<")
-  local end_pos = vim.fn.getpos("'>")
+  local start_pos = fn.getpos("'<")
+  local end_pos = fn.getpos("'>")
   local lines = api.nvim_buf_get_lines(0, start_pos[2] - 1, end_pos[2], false)
+  
+  if #lines == 0 then return '' end
 
-  if #lines == 0 then return "" end
+  -- Adjust last line end col
+  lines[#lines] = string.sub(lines[#lines], 1, end_pos[3])
+  -- Adjust first line start col
+  lines[1] = string.sub(lines[1], start_pos[3])
 
-  if #lines == 1 then
-    lines[1] = lines[1]:sub(start_pos[3], end_pos[3])
-  else
-    lines[1] = lines[1]:sub(start_pos[3])
-    lines[#lines] = lines[#lines]:sub(1, end_pos[3])
-  end
+  return table.concat(lines, '\n')
+end
 
-  return table.concat(lines, "\n")
+---Escape shell command
+---@param cmd string
+---@return string
+function M.escape_shell_cmd(cmd)
+  return vim.fn.shellescape(cmd)
 end
 
 return M

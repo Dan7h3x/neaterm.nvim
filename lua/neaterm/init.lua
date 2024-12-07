@@ -1,51 +1,97 @@
-local Neaterm = require('neaterm.terminal')
-local config = require('neaterm.config')
+local api = vim.api
+local fn = vim.fn
+local logger = require('neaterm.logger')
 
-local M = {}
+---@class Neaterm
+local Neaterm = {}
+Neaterm.__index = Neaterm
 
----@param user_opts table|nil
+---Create new Neaterm instance
+---@param opts table|nil
 ---@return Neaterm
-function M.setup(user_opts)
-  -- Ensure proper initialization
-  local status, opts = pcall(config.setup, user_opts)
-  if not status then
-    vim.notify("Neaterm: Failed to initialize config - " .. opts, vim.log.levels.ERROR)
-    return nil
-  end
-
-  -- Create new instance with error handling
-  local ok, neaterm = pcall(Neaterm.new, opts)
-  if not ok then
-    vim.notify("Neaterm: Failed to create instance - " .. neaterm, vim.log.levels.ERROR)
-    return nil
-  end
-
-  -- Setup core functionality with error handling
-  local setup_components = {
-    { name = "terminal", fn = function() neaterm:setup_terminal() end },
-    { name = "REPL", fn = function() neaterm:setup_repl() end },
-    { name = "keymaps", fn = function() 
-      if not opts.keymap_control.disable_keymaps then
-        neaterm:setup_keymaps()
-      end
-    end },
-  }
-
-  for _, component in ipairs(setup_components) do
-    local setup_ok, err = pcall(component.fn)
-    if not setup_ok then
-      vim.notify(string.format(
-        "Neaterm: Failed to setup %s - %s",
-        component.name,
-        err
-      ), vim.log.levels.WARN)
-    end
-  end
-
-  -- Store instance globally for command access
-  _G.Neaterm = neaterm
-
-  return neaterm
+function Neaterm.new(opts)
+  local self = setmetatable({}, Neaterm)
+  
+  -- Initialize state
+  self.terminals = {}
+  self.current_terminal = nil
+  self.current_repl = nil
+  self.terminal_states = {}
+  
+  -- Load configuration
+  self.opts = require('neaterm.config').setup(opts)
+  
+  -- Setup components
+  self:setup_components()
+  
+  return self
 end
 
-return M
+---Setup plugin components
+function Neaterm:setup_components()
+  -- Initialize logger
+  logger:debug("Initializing Neaterm components")
+
+  -- Setup state management
+  require('neaterm.state').setup()
+
+  -- Setup UI components
+  require('neaterm.highlights').setup(self.opts)
+  require('neaterm.status').setup(self)
+  require('neaterm.bar').setup(self)
+
+  -- Setup event handling
+  require('neaterm.events').setup(self)
+  require('neaterm.autocmd').setup(self)
+
+  -- Setup keymaps if enabled
+  if not self.opts.keymap_control.disable_keymaps then
+    require('neaterm.keymaps').setup(self)
+  end
+
+  -- Setup commands if enabled
+  if self.opts.keymap_control.enable_commands then
+    require('neaterm.commands').setup(self)
+  end
+
+  -- Setup filetype detection
+  require('neaterm.utils').setup_filetype_detection()
+
+  -- Setup VimLeave handling
+  require('neaterm.utils').setup_vimleave_autocmd(self)
+
+  logger:debug("Neaterm components initialized")
+end
+
+---Setup plugin
+---@param opts table|nil
+function Neaterm.setup(opts)
+  -- Create global instance
+  _G.Neaterm = Neaterm.new(opts)
+  
+  -- Create user commands
+  api.nvim_create_user_command('Neaterm', function(args)
+    require('neaterm.commands').handle_command(_G.Neaterm, args)
+  end, {
+    nargs = '*',
+    complete = function(arglead, cmdline, curpos)
+      return require('neaterm.commands').complete(arglead, cmdline, curpos)
+    end,
+  })
+end
+
+-- Include core functionality
+for _, module in ipairs({
+  'terminal',
+  'repl',
+  'ui',
+  'utils',
+}) do
+  for k, v in pairs(require('neaterm.' .. module)) do
+    if type(v) == 'function' then
+      Neaterm[k] = v
+    end
+  end
+end
+
+return Neaterm

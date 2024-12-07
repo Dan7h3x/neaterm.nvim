@@ -1,3 +1,8 @@
+local M = {}
+
+-- Generate help documentation
+function M.generate_help()
+  local help = [[
 *neaterm.txt*    A modern terminal and REPL management plugin for Neovim
 
 ================================================================================
@@ -10,7 +15,8 @@ CONTENTS                                                        *neaterm-content
     5. Commands ........................ |neaterm-commands|
     6. Keymaps ........................ |neaterm-keymaps|
     7. REPL Support .................... |neaterm-repl|
-    8. API ............................ |neaterm-api|
+    8. Integrations .................... |neaterm-integrations|
+    9. API ............................ |neaterm-api|
 
 ================================================================================
 1. INTRODUCTION                                            *neaterm-introduction*
@@ -20,6 +26,7 @@ Neaterm is a modern terminal and REPL management plugin for Neovim that provides
 - REPL support for multiple languages
 - Terminal persistence
 - Integrated command history
+- Plugin integrations
 - Diagnostic support
 
 ================================================================================
@@ -34,6 +41,7 @@ Optional dependencies:
 - telescope.nvim (for fuzzy finding)
 - nvim-cmp (for REPL completions)
 - nvim-treesitter (for better syntax highlighting)
+- nvim-dap (for debugging integration)
 
 ================================================================================
 3. INSTALLATION                                          *neaterm-installation*
@@ -41,13 +49,15 @@ Optional dependencies:
 Using lazy.nvim:
 >
     {
-        'username/neaterm.nvim',
+        'Dan7h3x/neaterm.nvim',
         dependencies = {
             'nvim-lua/plenary.nvim',
             'ibhagwan/fzf-lua',
         },
         config = function()
-            require('neaterm').setup()
+            require('neaterm').setup({
+                -- your configuration
+            })
         end
     }
 <
@@ -59,78 +69,34 @@ Default configuration:
 >
     require('neaterm').setup({
         shell = vim.o.shell,
-        float_width = 0.8,
-        float_height = 0.6,
-        border = 'rounded',
-        auto_insert = true,
-        auto_close = false,
-        keymaps = {
-            toggle = '<A-t>',
-            new_vertical = '<C-\\>',
-            new_horizontal = '<C-.>',
-            new_float = '<C-A-t>',
-        }
+        float_width = 0.5,
+        float_height = 0.4,
+        -- ... see config.lua for full options
     })
 <
 
 ================================================================================
 5. COMMANDS                                                  *neaterm-commands*
 
-:Neaterm                  Toggle terminal
-:NeatermNew [type]       Create new terminal (float/vertical/horizontal)
-:NeatermClose            Close current terminal
-:NeatermToggleREPL      Toggle REPL for current filetype
-:NeatermSendLine        Send current line to REPL
-:NeatermSendSelection   Send visual selection to REPL
-:NeatermSendBuffer      Send entire buffer to REPL
+:NeatermToggle ................ Toggle terminal window
+:NeatermVertical [cmd] ........ Create vertical terminal
+:NeatermHorizontal [cmd] ...... Create horizontal terminal
+:NeatermFloat [cmd] ........... Create floating terminal
+:NeatermClose ................ Close current terminal
+:NeatermREPL [lang] .......... Start REPL or show menu
+:NeatermREPLClear ............ Clear current REPL
+:NeatermREPLHistory .......... Show REPL command history
+:NeatermREPLVariables ........ Show REPL variables
+:NeatermToggleKeymaps ........ Toggle keymaps
+:NeatermInfo ................. Show plugin status
 
 ================================================================================
 6. KEYMAPS                                                    *neaterm-keymaps*
 
 Default keymaps (can be customized):
-    <A-t>     Toggle terminal
-    <C-\>     New vertical terminal
-    <C-.>     New horizontal terminal
-    <C-A-t>   New floating terminal
-    <leader>rt Toggle REPL
-    <leader>rl Send line to REPL
-    <leader>rs Send selection to REPL
-    <leader>rb Send buffer to REPL
-
-================================================================================
-7. REPL SUPPORT                                                 *neaterm-repl*
-
-Supported languages:
-- Python (IPython)
-- Node.js
-- Lua
-- R
-- Julia
-
-Features:
-- Command history
-- Variable inspection
-- Paste mode support
-- Diagnostics
-- Completion
-
-================================================================================
-8. API                                                          *neaterm-api*
-
-Lua API:
->
-    -- Create new terminal
-    require('neaterm').create_terminal({
-        type = 'float',
-        cmd = 'bash',
-        cwd = '/path/to/dir'
-    })
-
-    -- Start REPL
-    require('neaterm').start_repl('python')
-
-    -- Send text to REPL
-    require('neaterm').send_to_repl('print("Hello")')
-<
-
-vim:ft=help:tw=78:ts=8:noet:
+    <A-t> .................... Toggle terminal
+    <C-\> ................... New vertical terminal
+    <C-.> ................... New horizontal terminal
+]]
+  return help
+end 
