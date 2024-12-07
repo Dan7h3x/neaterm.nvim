@@ -27,7 +27,7 @@ local default_opts = {
     new_vertical = '<C-\\>',
     new_horizontal = '<C-.>',
     new_float = '<C-A-t>',
-    close = '<C-d>',
+    close = '<A-d>',
     next = '<C-PageDown>',
     prev = '<C-PageUp>',
     move_up = '<C-A-Up>',
@@ -65,9 +65,9 @@ local default_opts = {
       name = "Python (IPython)",
       cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "import sys",
-        "sys.ps1 = 'In []: '",
-        "sys.ps2 = '   ....: '",
+        -- "import sys",
+        -- "sys.ps1 = 'In []: '",
+        -- "sys.ps2 = '   ....: '",
       },
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
@@ -77,8 +77,8 @@ local default_opts = {
       name = "R (Radian)",
       cmd = "radian",
       startup_cmds = {
-        "options(width = 80)",
-        "options(prompt = 'R> ')",
+        -- "options(width = 80)",
+        -- "options(prompt = 'R> ')",
       },
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
@@ -106,12 +106,6 @@ local default_opts = {
       inspect_variable_cmd = "echo $",
       exit_cmd = "exit",
     },
-  },
-
-  -- Add keymap control options
-  keymap_control = {
-    disable_keymaps = false,
-    enable_commands = true, -- Always enable commands by default
   },
 }
 

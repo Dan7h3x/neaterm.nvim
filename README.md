@@ -12,8 +12,12 @@ A little (smart maybe) terminal plugin for neovim.
 
 <div class="plugin-media"> 
     <h3>Demo Video</h3>
-    <img width="720" height="480" src="https://github.com/user-attachments/assets/4c272ae0-5c8e-479b-9a41-b255e34a8828"></img>
+    <img width="720" height="480" src="https://github.com/user-attachments/assets/46130bbc-c72b-4523-bab6-d5916e3573b3"></img>
 </div>
+
+A small example of using `neaterm` in neovim:
+
+![Screenshot](https://github.com/user-attachments/assets/4edfffbe-1004-429b-bead-a2e4f4bafac4)
 
 ## Installation
 
@@ -35,7 +39,7 @@ with following default configuration:
 }
 ```
 
-or change the configuration based on what you want:
+or change the config based on what you want:
 
 ```lua
 opts = {
@@ -64,7 +68,7 @@ opts = {
     new_vertical = '<C-\\>',
     new_horizontal = '<C-.>',
     new_float = '<C-A-t>',
-    close = '<C-d>',
+    close = '<A-d>',
     next = '<C-PageDown>',
     prev = '<C-PageUp>',
     move_up = '<C-A-Up>',
