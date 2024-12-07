@@ -115,19 +115,19 @@ local default_opts = {
     commands = {
       python = {
         start = '%paste',
-        end = '',
+        finish = '',
       },
       r = {
         start = 'paste0("',
-        end = '")',
+        finish = '")',
       },
       node = {
         start = '.editor',
-        end = '<C-d>',
+        finish = '<C-d>',
       },
       default = {
         start = '',
-        end = '',
+        finish = '',
       }
     }
   },

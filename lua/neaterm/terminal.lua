@@ -943,198 +943,43 @@ function Neaterm:setup_vscode_features()
   end, { silent = true, desc = "Quick terminal selection" })
 end
 
+function Neaterm:send_text_with_paste_mode(text, filetype)
+  if not text or text == "" then return end
+  
+  local paste_config = self.opts.paste_mode.commands[filetype] 
+    or self.opts.paste_mode.commands.default
 
--- Add VSCode-like features
-function Neaterm:setup_vscode_features()
-  -- Ensure required dependencies
-  local has_fzf = pcall(require, 'fzf-lua')
-  if not has_fzf then
-    vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
+  if self.opts.paste_mode.enabled and paste_config then
+    -- Send paste start command
+    if paste_config.start ~= "" then
+      self:send_text(paste_config.start)
+      -- Small delay to ensure proper paste mode
+      vim.defer_fn(function()
+        self:send_text(text)
+        -- Send paste finish command if needed
+        if paste_config.finish ~= "" then
+          self:send_text(paste_config.finish)
+        end
+      end, 50)
+    else
+      self:send_text(text)
+    end
+  else
+    self:send_text(text)
+  end
+end
+
+function Neaterm:send_selection_to_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
 
-  -- Terminal search with improved buffer handling
-  vim.keymap.set('t', '<C-f>', function()
-    local buf = api.nvim_get_current_buf()
-    if not buf or not self.terminals[buf] then return end
-
-    -- Ensure buffer is valid
-    if not api.nvim_buf_is_valid(buf) then
-      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
-      return
-    end
-
-    -- Get buffer content for searching
-    local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
-    if #lines == 0 then
-      vim.notify("Terminal buffer is empty", vim.log.levels.INFO)
-      return
-    end
-
-    -- Create temporary file for searching
-    local temp_file = vim.fn.tempname()
-    vim.fn.writefile(lines, temp_file)
-
-    require('fzf-lua').live_grep({
-      prompt = "Search Terminal > ",
-      cwd = vim.fn.getcwd(),
-      search = "",
-      cmd = string.format(
-        "grep -R --line-buffered --color=never -n '' %s",
-        vim.fn.shellescape(temp_file)
-      ),
-      actions = {
-        ["default"] = function(selected)
-          -- Clean up temp file
-          vim.fn.delete(temp_file)
-          if selected and selected[1] then
-            local line_num = tonumber(selected[1]:match("^(%d+)"))
-            if line_num then
-              -- Scroll to line
-              vim.schedule(function()
-                if api.nvim_buf_is_valid(buf) then
-                  api.nvim_buf_call(buf, function()
-                    vim.cmd('normal! ' .. line_num .. 'G')
-                  end)
-                end
-              end)
-            end
-          end
-        end,
-        ["ctrl-c"] = function()
-          vim.fn.delete(temp_file)
-        end
-      },
-      winopts = {
-        height = 0.4,
-        width = 0.6,
-        preview = {
-          hidden = 'hidden'
-        }
-      }
-    })
-  end, { silent = true, desc = "Search in terminal" })
-
-  -- Terminal split with improved options
-  vim.keymap.set('t', '<C-\\>', function()
-    local current = api.nvim_get_current_buf()
-    if not current or not self.terminals[current] then return end
-
-    -- Ensure current terminal is valid
-    if not api.nvim_buf_is_valid(current) then
-      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
-      return
-    end
-
-    -- Get current terminal info
-    local current_term = self.terminals[current]
-    if not current_term then return end
-
-    -- Create new terminal with similar settings
-    local term_opts = {
-      cmd = current_term.cmd,
-      type = 'vertical',
-      env = current_term.env,
-      cwd = current_term.cwd,
-      -- Preserve window dimensions
-      float_width = current_term.float_width,
-      float_height = current_term.float_height
-    }
-
-    -- Create new terminal safely
-    vim.schedule(function()
-      local new_buf = self:create_terminal(term_opts)
-      if new_buf then
-        -- Sync some settings between terminals
-        if current_term.on_exit then
-          self.terminals[new_buf].on_exit = current_term.on_exit
-        end
-      end
-    end)
-  end, { silent = true, desc = "Split terminal" })
-
-  -- Quick terminal selection with improved UI
-  vim.keymap.set('n', '<A-j>', function()
-    local terms = vim.tbl_keys(self.terminals)
-    if #terms == 0 then
-      vim.notify("No active terminals", vim.log.levels.INFO)
-      return
-    end
-
-    local items = {}
-    for _, buf in ipairs(terms) do
-      -- Ensure buffer is valid
-      if api.nvim_buf_is_valid(buf) then
-        local term = self.terminals[buf]
-        if term then
-          local cmd_name = term.cmd and vim.fn.fnamemodify(term.cmd, ":t") or "terminal"
-          local status = api.nvim_buf_get_var(buf, "term_title") or ""
-          
-          table.insert(items, {
-            name = string.format("%s (%s) %s", 
-              cmd_name,
-              term.type,
-              status ~= "" and "- " .. status or ""
-            ),
-            buf = buf,
-            cmd = term.cmd,
-            type = term.type
-          })
-        end
-      end
-    end
-
-    if #items == 0 then
-      vim.notify("No valid terminals found", vim.log.levels.INFO)
-      return
-    end
-
-    -- Sort items by most recently used
-    table.sort(items, function(a, b)
-      local a_time = api.nvim_buf_get_var(a.buf, "term_last_used") or 0
-      local b_time = api.nvim_buf_get_var(b.buf, "term_last_used") or 0
-      return a_time > b_time
-    end)
-
-    require('fzf-lua').fzf_exec(
-      vim.tbl_map(function(item) return item.name end, items),
-      {
-        prompt = "Quick Terminal > ",
-        actions = {
-          ["default"] = function(selected)
-            if not selected or #selected == 0 then return end
-            local selection = selected[1]
-            for _, item in ipairs(items) do
-              if item.name == selection then
-                -- Update last used time
-                pcall(api.nvim_buf_set_var, item.buf, "term_last_used", vim.fn.localtime())
-                -- Show terminal
-                self:show_terminal(item.buf)
-                break
-              end
-            end
-          end,
-          ["ctrl-x"] = function(selected)
-            if not selected or #selected == 0 then return end
-            local selection = selected[1]
-            for _, item in ipairs(items) do
-              if item.name == selection then
-                self:safe_close_terminal(item.buf)
-                break
-              end
-            end
-          end
-        },
-        winopts = {
-          height = 0.4,
-          width = 0.6,
-          preview = {
-            hidden = 'hidden'
-          }
-        }
-      }
-    )
-  end, { silent = true, desc = "Quick terminal selection" })
+  local text = utils.get_visual_selection()
+  if text ~= "" then
+    self:add_to_history(text, self.current_repl.filetype)
+    self:send_text_with_paste_mode(text, self.current_repl.filetype)
+  end
 end
 
 function Neaterm:cleanup()
