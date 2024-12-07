@@ -33,50 +33,25 @@ function Neaterm:setup_repl()
 end
 
 function Neaterm:setup_keymaps()
+  if not self.opts.use_default_keymaps then
+    return
+  end
+  local function safe_map(mode, lhs, rhs, opts)
+    -- Check if mapping exists
+    local existing = vim.fn.maparg(lhs, mode)
+    if existing ~= "" then
+      vim.notify(string.format(
+        "Keymap %s is already mapped to: %s. Skipping...",
+        lhs,
+        existing
+      ), vim.log.levels.WARN)
+      return
+    end
+    
+    vim.keymap.set(mode, lhs, rhs, opts)
+  end
   local opts = { noremap = true, silent = true }
-  --
-  -- -- Terminal management
-  -- local maps = {
-  --   -- Basic terminal operations
-  --   [self.opts.keymaps.toggle] = function() self:toggle_terminal() end,
-  --   [self.opts.keymaps.new_vertical] = function() self:create_terminal({ type = 'vertical' }) end,
-  --   [self.opts.keymaps.new_horizontal] = function() self:create_terminal({ type = 'horizontal' }) end,
-  --   [self.opts.keymaps.new_float] = function() self:create_terminal({ type = 'float' }) end,
-  --   [self.opts.keymaps.close] = function() self:close_current_terminal() end,
-  --
-  --   -- Terminal navigation
-  --   [self.opts.keymaps.next] = function() self:next_terminal() end,
-  --   [self.opts.keymaps.prev] = function() self:prev_terminal() end,
-  --
-  --   -- Terminal movement
-  --   [self.opts.keymaps.move_up] = function() self:move_terminal('up') end,
-  --   [self.opts.keymaps.move_down] = function() self:move_terminal('down') end,
-  --   [self.opts.keymaps.move_left] = function() self:move_terminal('left') end,
-  --   [self.opts.keymaps.move_right] = function() self:move_terminal('right') end,
-  --
-  --   -- Terminal resizing
-  --   [self.opts.keymaps.resize_up] = function() self:resize_terminal('up') end,
-  --   [self.opts.keymaps.resize_down] = function() self:resize_terminal('down') end,
-  --   [self.opts.keymaps.resize_left] = function() self:resize_terminal('left') end,
-  --   [self.opts.keymaps.resize_right] = function() self:resize_terminal('right') end,
-  --
-  --   -- REPL operations
-  --   [self.opts.keymaps.repl_toggle] = function() self:show_repl_menu() end,
-  --   [self.opts.keymaps.repl_send_line] = function() self:send_line_to_repl() end,
-  --   [self.opts.keymaps.repl_send_buffer] = function() self:send_buffer_to_repl() end,
-  --   [self.opts.keymaps.repl_clear] = function() self:clear_repl() end,
-  --   [self.opts.keymaps.repl_history] = function() self:show_history() end,
-  --   [self.opts.keymaps.repl_variables] = function() self:show_variables() end,
-  --   [self.opts.keymaps.repl_restart] = function() self:restart_repl() end,
-  --
-  --   -- Bar operations
-  --   [self.opts.keymaps.focus_bar] = function() self:focus_bar() end,
-  -- }
-  --
-  -- -- Set normal mode mappings
-  -- for key, func in pairs(maps) do
-  --   vim.keymap.set('n', key, func, opts)
-  -- end
+  
   local maps = {
     -- Basic terminal operations
     { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,     desc = "Toggle terminal",     mode = { 'n', 't' } },
@@ -160,11 +135,13 @@ function Neaterm:setup_keymaps()
 
   -- Set normal mode mappings
   for _, map in ipairs(maps) do
-    vim.keymap.set(map.mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+    for _, mode in ipairs(map.mode) do
+      safe_map(mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
+    end
   end
 
   -- Set visual mode mapping for REPL selection
-  vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
+  safe_map('v', self.opts.keymaps.repl_send_selection, function()
     self:send_selection_to_repl()
   end, opts)
 end
@@ -1001,7 +978,7 @@ function Neaterm:send_selection_to_repl()
   local text = utils.get_visual_selection()
   if text ~= "" then
     self:add_to_history(text, self.current_repl.filetype)
-    self:send_text(text)
+    self:send_text_with_paste_mode(text, self.current_repl.filetype)
   end
 end
 
@@ -1311,6 +1288,96 @@ function Neaterm:setup_features()
     silent = true,
     desc = self.opts.keymaps.terminal_picker.desc
   })
+end
+
+function Neaterm:send_text_with_paste_mode(text, filetype)
+  if not text or text == "" then return end
+  
+  local paste_config = self.opts.paste_mode.commands[filetype] 
+    or self.opts.paste_mode.commands.default
+
+  if self.opts.paste_mode.enabled and paste_config then
+    -- Send paste start command
+    if paste_config.start ~= "" then
+      self:send_text(paste_config.start)
+      -- Small delay to ensure proper paste mode
+      vim.defer_fn(function()
+        self:send_text(text)
+        -- Send paste end command if needed
+        if paste_config.end ~= "" then
+          self:send_text(paste_config.end)
+        end
+      end, 50)
+    else
+      self:send_text(text)
+    end
+  else
+    self:send_text(text)
+  end
+end
+
+-- Add VSCode-like features
+function Neaterm:setup_vscode_features()
+  -- Terminal search
+  vim.keymap.set('t', '<C-f>', function()
+    local buf = api.nvim_get_current_buf()
+    if self.terminals[buf] then
+      -- Create search UI
+      require('fzf-lua').live_grep({
+        prompt = "Search Terminal > ",
+        cwd = vim.fn.getcwd(),
+        search = "",
+        cmd = "grep -R --line-buffered --color=never -n '' " 
+          .. api.nvim_buf_get_name(buf)
+      })
+    end
+  end, { silent = true, desc = "Search in terminal" })
+
+  -- Terminal split
+  vim.keymap.set('t', '<C-\\>', function()
+    local current = api.nvim_get_current_buf()
+    if self.terminals[current] then
+      local term_opts = vim.deepcopy(self.terminals[current])
+      term_opts.type = 'vertical'
+      self:create_terminal(term_opts)
+    end
+  end, { silent = true, desc = "Split terminal" })
+
+  -- Quick terminal selection
+  vim.keymap.set('n', '<A-j>', function()
+    local terms = vim.tbl_keys(self.terminals)
+    if #terms > 0 then
+      local items = {}
+      for _, buf in ipairs(terms) do
+        local term = self.terminals[buf]
+        table.insert(items, {
+          name = string.format("%s (%s)", 
+            vim.fn.fnamemodify(term.cmd or "terminal", ":t"),
+            term.type
+          ),
+          buf = buf
+        })
+      end
+      
+      require('fzf-lua').fzf_exec(
+        vim.tbl_map(function(item) return item.name end, items),
+        {
+          prompt = "Quick Terminal > ",
+          actions = {
+            ["default"] = function(selected)
+              local selection = selected[1]
+              for _, item in ipairs(items) do
+                if item.name == selection then
+                  self:show_terminal(item.buf)
+                  break
+                end
+              end
+            end
+          }
+        }
+      )
+    end
+  end, { silent = true, desc = "Quick terminal selection" })
 end
 
 return Neaterm

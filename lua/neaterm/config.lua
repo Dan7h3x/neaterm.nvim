@@ -107,6 +107,30 @@ local default_opts = {
       exit_cmd = "exit",
     },
   },
+
+  -- Add new options
+  use_default_keymaps = true,
+  paste_mode = {
+    enabled = true,
+    commands = {
+      python = {
+        start = '%paste',
+        end = '',
+      },
+      r = {
+        start = 'paste0("',
+        end = '")',
+      },
+      node = {
+        start = '.editor',
+        end = '<C-d>',
+      },
+      default = {
+        start = '',
+        end = '',
+      }
+    }
+  },
 }
 
 ---@param user_opts? table
