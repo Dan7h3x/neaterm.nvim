@@ -107,6 +107,12 @@ local default_opts = {
       exit_cmd = "exit",
     },
   },
+
+  -- Add keymap control options
+  keymap_control = {
+    disable_keymaps = false,
+    enable_commands = true, -- Always enable commands by default
+  },
 }
 
 ---@param user_opts? table
