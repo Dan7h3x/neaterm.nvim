@@ -103,7 +103,7 @@ function M.create_user_commands(neaterm)
 
   -- Add commands for each custom terminal
   for term_name, term_config in pairs(neaterm.opts.terminals) do
-    local cmd_name = "Term_" .. term_name:gsub("^%l", string.upper)
+    local cmd_name = "Neaterm" .. term_name:gsub("^%l", string.upper)
     commands[cmd_name] = {
       callback = function(opts)
         neaterm:create_terminal(vim.tbl_extend("force", {
