@@ -1,35 +1,25 @@
 local M = {}
 
--- Default configuration
-M.defaults = {
-  -- Shell configuration
+---@class NeatermConfig
+local default_opts = {
+  -- Terminal settings
   shell = vim.o.shell,
-  shell_args = {},
-  clear_env = false,
-
-  -- Window dimensions
-  float_width = 0.8,
-  float_height = 0.6,
-  min_width = 30,
-  min_height = 10,
-  move_amount = 5,
-  resize_amount = 3,
-
-  -- Window appearance
+  float_width = 0.5,
+  float_height = 0.4,
+  move_amount = 3,
+  resize_amount = 2,
   border = 'rounded',
-  default_type = 'float',
-  auto_insert = true,
-  auto_close = false,
-  persist_size = true,
-  persist_mode = true,
-  set_title = true,
-  show_number = false,
 
-  -- Keymap control
-  keymap_control = {
-    disable_keymaps = false,
-    enable_commands = true,
+  -- Appearance
+  highlights = {
+    normal = 'Normal',
+    border = 'FloatBorder',
+    title = 'Title',
   },
+
+  -- Window management
+  min_width = 20,
+  min_height = 3,
 
   -- Default keymaps
   keymaps = {
@@ -38,17 +28,17 @@ M.defaults = {
     new_horizontal = '<C-.>',
     new_float = '<C-A-t>',
     close = '<C-d>',
-    next = '<A-n>',
-    prev = '<A-p>',
-    move_up = '<A-K>',
-    move_down = '<A-J>',
-    move_left = '<A-H>',
-    move_right = '<A-L>',
-    resize_up = '<A-Up>',
-    resize_down = '<A-Down>',
-    resize_left = '<A-Left>',
-    resize_right = '<A-Right>',
-    focus_bar = '<A-b>',
+    next = '<C-PageDown>',
+    prev = '<C-PageUp>',
+    move_up = '<C-A-Up>',
+    move_down = '<C-A-Down>',
+    move_left = '<C-A-Left>',
+    move_right = '<C-A-Right>',
+    resize_up = '<C-S-Up>',
+    resize_down = '<C-S-Down>',
+    resize_left = '<C-S-Left>',
+    resize_right = '<C-S-Right>',
+    focus_bar = '<C-A-b>',
     repl_toggle = '<leader>rt',
     repl_send_line = '<leader>rl',
     repl_send_selection = '<leader>rs',
@@ -56,104 +46,130 @@ M.defaults = {
     repl_clear = '<leader>rc',
     repl_history = '<leader>rh',
     repl_variables = '<leader>rv',
-    repl_restart = '<leader>rr',
+    repl_restart = '<leader>rR',
   },
 
-  -- Highlight groups
-  highlights = {
-    normal = 'Normal',
-    border = 'FloatBorder',
-    title = 'Title',
-    active = 'Visual',
-    repl = 'Special',
-  },
-
-  -- REPL configuration
+  -- REPL configurations
   repl = {
-    float_width = 0.8,
-    float_height = 0.6,
+    float_width = 0.6,
+    float_height = 0.4,
     save_history = true,
-    history_file = vim.fn.stdpath('data') .. '/neaterm/repl_history.json',
-    max_history = 1000,
-    update_interval = 100,
-    auto_complete = true,
-    show_line_numbers = false,
-    show_diagnostics = true,
-    indent_lines = true,
+    history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
+    max_history = 100,
+    update_interval = 5000,
   },
 
   -- REPL language configurations
   repl_configs = {
     python = {
-      name = 'Python',
-      cmd = 'ipython',
-      paste_cmd = '%paste',
-      startup_cmds = {'%autoindent'},
-      get_variables_cmd = '%whos',
-      inspect_variable_cmd = '?%s',
-      delete_variable_cmd = 'del %s',
-      exit_cmd = 'exit()',
-      file_patterns = {'%.py$', '%.pyw$'},
-      diagnostics = {
-        enable = true,
-        patterns = {
-          error = '^ERROR:',
-          warning = '^WARNING:',
-          info = '^INFO:',
-        },
+      name = "Python (IPython)",
+      cmd = "ipython --no-autoindent --colors='Linux'",
+      startup_cmds = {
+        -- "import sys",
+        -- "sys.ps1 = 'In []: '",
+        -- "sys.ps2 = '   ....: '",
       },
+      get_variables_cmd = "whos",
+      inspect_variable_cmd = "?",
+      exit_cmd = "exit()",
     },
-    -- Add more REPL configurations here
-  },
-
-  -- Integration settings
-  integrations = {
-    which_key = true,
-    telescope = true,
-    nvim_cmp = true,
-    treesitter = true,
-    dap = true,
+    r = {
+      name = "R (Radian)",
+      cmd = "radian",
+      startup_cmds = {
+        -- "options(width = 80)",
+        -- "options(prompt = 'R> ')",
+      },
+      get_variables_cmd = "ls.str()",
+      inspect_variable_cmd = "str(",
+      exit_cmd = "q(save='no')",
+    },
+    lua = {
+      name = "Lua",
+      cmd = "lua",
+      exit_cmd = "os.exit()",
+    },
+    node = {
+      name = "Node.js",
+      cmd = "node",
+      get_variables_cmd = "Object.keys(global)",
+      exit_cmd = ".exit",
+    },
+    sh = {
+      name = "Shell",
+      cmd = vim.o.shell,
+      startup_cmds = {
+        "PS1='$ '",
+        "TERM=xterm-256color",
+      },
+      get_variables_cmd = "set",
+      inspect_variable_cmd = "echo $",
+      exit_cmd = "exit",
+    },
   },
 }
 
----Setup configuration
----@param opts table|nil
----@return table
-function M.setup(opts)
-  -- Merge user config with defaults
-  local config = vim.tbl_deep_extend('force', M.defaults, opts or {})
+---@param user_opts? table
+---@return NeatermConfig
+function M.setup(user_opts)
+  -- Ensure user_opts is a table
+  user_opts = user_opts or {}
 
-  -- Validate configuration
-  M.validate_config(config)
+  -- Deep copy of default options
+  local opts = vim.deepcopy(default_opts)
 
-  return config
-end
-
----Validate configuration
----@param config table
-function M.validate_config(config)
-  -- Add validation logic here
-  -- Example: Check required fields
-  local required = {
-    'shell',
-    'float_width',
-    'float_height',
-    'border',
-  }
-
-  for _, field in ipairs(required) do
-    if config[field] == nil then
-      error(string.format("Missing required configuration field: %s", field))
+  -- Merge user options
+  for key, value in pairs(user_opts) do
+    if key == 'repl_configs' then
+      -- Special handling for REPL configs
+      opts.repl_configs = opts.repl_configs or {}
+      for lang, config in pairs(value) do
+        if opts.repl_configs[lang] then
+          opts.repl_configs[lang] = vim.tbl_deep_extend('force', opts.repl_configs[lang], config)
+        else
+          opts.repl_configs[lang] = config
+        end
+      end
+    else
+      -- Regular option merging
+      if type(value) == 'table' then
+        opts[key] = vim.tbl_deep_extend('force', opts[key] or {}, value)
+      else
+        opts[key] = value
+      end
     end
   end
 
-  -- Validate ranges
-  if config.float_width <= 0 or config.float_width > 1 then
-    error("float_width must be between 0 and 1")
-  end
-  if config.float_height <= 0 or config.float_height > 1 then
-    error("float_height must be between 0 and 1")
-  end
+  return opts
 end
+
+-- Configuration for lazy.nvim
+M.lazy = {
+  'Dan7h3x/neaterm.nvim',
+  event = 'VeryLazy',
+  keys = {
+    { '<A-t>',      desc = 'Toggle terminal' },
+    { '<C-\\>',     desc = 'New vertical terminal' },
+    { '<C-.>',      desc = 'New horizontal terminal' },
+    { '<C-A-t>',    desc = 'New floating terminal' },
+    { '<leader>rt', desc = 'Toggle REPL menu' },
+    { '<leader>rl', desc = 'Send line to REPL' },
+    { '<leader>rs', mode = 'v',                      desc = 'Send selection to REPL' },
+    { '<leader>rb', desc = 'Send buffer to REPL' },
+  },
+  opts = {
+    -- User can override default options here
+    -- Example:
+    -- float_width = 0.7,
+    -- float_height = 0.5,
+  },
+  config = function(_, opts)
+    require('neaterm').setup(opts)
+  end,
+  dependencies = {
+    'nvim-lua/plenary.nvim',
+    'ibhagwan/fzf-lua',
+  },
+}
 
 return M
