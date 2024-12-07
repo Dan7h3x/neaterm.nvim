@@ -32,22 +32,25 @@ function M.create_user_commands(neaterm)
   local commands = {
     NeatermVertical = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'vertical', cmd = opts.args })
+        neaterm:create_terminal({ type = 'vertical', cmd = opts.args or vim.o.shell })
       end
     },
     NeatermHorizontal = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'horizontal', cmd = opts.args })
+        neaterm:create_terminal({ type = 'horizontal', cmd = opts.args or vim.o.shell
+        })
       end
     },
     NeatermFloat = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'float', cmd = opts.args })
+        neaterm:create_terminal({ type = 'float', cmd = opts.args or vim.o.shell
+        })
       end
     },
     NeatermFull = {
       callback = function(opts)
-        neaterm:create_terminal({ type = 'full', cmd = opts.args })
+        neaterm:create_terminal({ type = 'full', cmd = opts.args or vim.o.shell
+        })
       end
     },
     NeatermToggle = {
