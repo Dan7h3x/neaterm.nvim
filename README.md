@@ -42,7 +42,7 @@ with following default configuration:
 or change the config based on what you want:
 
 ```lua
-opts = {
+default_opts = {
   -- Terminal settings
   shell = vim.o.shell,
   float_width = 0.5,
@@ -62,7 +62,54 @@ opts = {
   min_width = 20,
   min_height = 3,
 
+
+  -- custom terminals
+  terminals = {
+    ranger = {
+      name = "Ranger",
+      cmd = "ranger",
+      type = "float",
+      float_width = 0.8,
+      float_height = 0.8,
+      keymaps = {
+        quit = "q",
+        select = "<CR>",
+        preview = "p",
+      },
+      on_exit = function(selected_file)
+        if selected_file then
+          vim.cmd('edit ' .. selected_file)
+        end
+      end
+    },
+    lazygit = {
+      name = "LazyGit",
+      cmd = "lazygit",
+      type = "float",
+      float_width = 0.9,
+      float_height = 0.9,
+      keymaps = {
+        quit = "q",
+        commit = "c",
+        push = "P",
+      },
+    },
+    btop = {
+      name = "Btop",
+      cmd = "btop",
+      type = "float",
+      float_width = 0.8,
+      float_height = 0.8,
+      keymaps = {
+        quit = "q",
+        help = "h",
+      },
+    },
+
+  },
+
   -- Default keymaps
+  use_default_keymaps = true,
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
@@ -106,9 +153,9 @@ opts = {
       name = "Python (IPython)",
       cmd = "ipython --no-autoindent --colors='Linux'",
       startup_cmds = {
-        "import sys",
-        "sys.ps1 = 'In []: '",
-        "sys.ps2 = '   ....: '",
+        -- "import sys",
+        -- "sys.ps1 = 'In []: '",
+        -- "sys.ps2 = '   ....: '",
       },
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
@@ -118,8 +165,8 @@ opts = {
       name = "R (Radian)",
       cmd = "radian",
       startup_cmds = {
-        "options(width = 80)",
-        "options(prompt = 'R> ')",
+        -- "options(width = 80)",
+        -- "options(prompt = 'R> ')",
       },
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
@@ -148,9 +195,21 @@ opts = {
       exit_cmd = "exit",
     },
   },
+
+  -- Terminal features
+  features = {
+    auto_insert = true,
+    auto_close = true,
+    restore_layout = true,
+    smart_sizing = true,
+    persistent_history = true,
+    native_search = true,
+    clipboard_sync = true,
+    shell_integration = true,
+  },
 }
 ```
 
 ## Contributing
 
-I don't how, if you can help me and this plugin please contact me in `Telegram` : `@Dan7h3x` or mail me `m.jalili.barbin@gmail.com`.:)
+I don't how, but if you want to help me and this plugin, please contact me in `Telegram` : `@Dan7h3x` or mail me `m.jalili.barbin@gmail.com`.:)
