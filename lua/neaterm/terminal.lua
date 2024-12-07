@@ -120,11 +120,11 @@ end
 
 -- Terminal Management Methods
 function Neaterm:create_terminal(term_opts)
-  -- Ensure term_opts exists
+  -- Ensure term_opts exists with proper defaults
   term_opts = vim.tbl_deep_extend('keep', term_opts or {}, {
     type = 'float',
     cmd = self.opts.shell,
-    env = {},
+    env = vim.empty_dict(), -- Fix: Use empty_dict() for env
     cwd = vim.fn.getcwd(),
   })
 
@@ -146,9 +146,8 @@ function Neaterm:create_terminal(term_opts)
     return nil
   end
 
-  -- Start terminal job
-  local job_id = vim.fn.termopen(term_opts.cmd, {
-    env = term_opts.env,
+  -- Prepare terminal options
+  local term_config = {
     cwd = term_opts.cwd,
     on_exit = function()
       -- Don't immediately delete the buffer/window
@@ -159,7 +158,15 @@ function Neaterm:create_terminal(term_opts)
         vim.notify("Terminal process exited", vim.log.levels.INFO)
       end
     end
-  })
+  }
+
+  -- Only add env if it's not empty
+  if term_opts.env and not vim.tbl_isempty(term_opts.env) then
+    term_config.env = term_opts.env
+  end
+
+  -- Start terminal job
+  local job_id = vim.fn.termopen(term_opts.cmd, term_config)
 
   if job_id <= 0 then
     vim.notify("Failed to start terminal process", vim.log.levels.ERROR)
