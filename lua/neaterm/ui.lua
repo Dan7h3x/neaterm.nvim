@@ -102,4 +102,3 @@ function M.setup_highlights(opts)
 end
 
 return M
-

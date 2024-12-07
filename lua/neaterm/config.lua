@@ -119,8 +119,8 @@ local default_opts = {
   use_default_keymaps = true,
   paste_mode = {
     enabled = true,
-    trim_prompt = true,  -- Remove prompt characters when pasting
-    remove_empty_lines = true,  -- Remove empty lines when pasting
+    trim_prompt = true,        -- Remove prompt characters when pasting
+    remove_empty_lines = true, -- Remove empty lines when pasting
     commands = {
       python = {
         start = '%paste',
@@ -139,7 +139,7 @@ local default_opts = {
         finish = '<C-d>',
       },
       julia = {
-        start = ';',  -- Julia paste mode
+        start = ';', -- Julia paste mode
         finish = '',
       },
       default = {

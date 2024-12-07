@@ -34,9 +34,9 @@ function M.setup(user_opts)
 
   -- Initialize features safely
   local setup_functions = {
-    { name = "REPL", fn = function() neaterm:setup_repl() end },
-    { name = "Terminal", fn = function() neaterm:setup_terminal() end },
-    { name = "Keymaps", fn = function() neaterm:setup_keymaps() end },
+    { name = "REPL",            fn = function() neaterm:setup_repl() end },
+    { name = "Terminal",        fn = function() neaterm:setup_terminal() end },
+    { name = "Keymaps",         fn = function() neaterm:setup_keymaps() end },
     { name = "VSCode Features", fn = function() neaterm:setup_vscode_features() end }
   }
 

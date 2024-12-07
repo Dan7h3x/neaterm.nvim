@@ -201,9 +201,9 @@ end
 -- Essential terminal keymaps that are always set
 function Neaterm:setup_essential_terminal_keymaps(buf)
   if not buf or not vim.api.nvim_buf_is_valid(buf) then return end
-  
+
   local opts = { buffer = buf, silent = true }
-  
+
   -- Essential keymaps that should always work
   vim.keymap.set('t', '<ESC><ESC>', '<C-\\><C-n>', opts)
   vim.keymap.set('t', '<C-d>', function()
@@ -223,9 +223,9 @@ end
 -- Improved paste handling
 function Neaterm:send_text_with_paste_mode(text, filetype)
   if not text or text == "" then return end
-  
-  local paste_config = self.opts.paste_mode.commands[filetype] 
-    or self.opts.paste_mode.commands.default
+
+  local paste_config = self.opts.paste_mode.commands[filetype]
+      or self.opts.paste_mode.commands.default
 
   -- Process text according to paste mode settings
   if self.opts.paste_mode.enabled then
@@ -233,7 +233,7 @@ function Neaterm:send_text_with_paste_mode(text, filetype)
       -- Remove common prompt characters
       text = text:gsub("^%s*[>$#%%]+%s*", "")
     end
-    
+
     if self.opts.paste_mode.remove_empty_lines then
       -- Remove empty lines while preserving indentation
       local lines = vim.split(text, "\n")
@@ -867,12 +867,13 @@ function Neaterm:cleanup_terminal(buf)
 
   ui.update_bar(self)
 end
+
 function Neaterm:safe_close_repl()
   if not self.current_repl then return end
 
   local repl = self.current_repl
   local buf = repl.buf
-  
+
   -- Exit commands for different REPLs
   local exit_cmds = {
     python = "exit()",
@@ -922,225 +923,224 @@ function Neaterm:safe_close_repl()
   end, 150)
 end
 
-
 -- Add this method to the Neaterm class
-function Neaterm:setup_vscode_features()
-  -- Ensurerequired dependencies
-  local has_fzf = pcall(require, 'fzf-lua')
-  if not has_fzf then
-    vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
-    return
-  end
+-- function Neaterm:setup_vscode_features()
+--   -- Ensurerequired dependencies
+--   local has_fzf = pcall(require, 'fzf-lua')
+--   if not has_fzf then
+--     vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   -- Terminal search with improved buffer handling
+--   vim.keymap.set('t', '<C-f>', function()
+--     local buf = api.nvim_get_current_buf()
+--     if not buf or not self.terminals[buf] then return end
+--
+--     -- Ensure buffer is valid
+--     if not api.nvim_buf_is_valid(buf) then
+--       vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
+--       return
+--     end
+--
+--     -- Get buffer content for searching
+--     local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+--     if #lines == 0 then
+--       vim.notify("Terminal buffer is empty", vim.log.levels.INFO)
+--       return
+--     end
+--
+--     -- Create temporary file for searching
+--     local temp_file = vim.fn.tempname()
+--     vim.fn.writefile(lines, temp_file)
+--
+--     require('fzf-lua').live_grep({
+--       prompt = "Search Terminal > ",
+--       cwd = vim.fn.getcwd(),
+--       search = "",
+--       cmd = string.format(
+--         "grep -R --line-buffered --color=never -n '' %s",
+--         vim.fn.shellescape(temp_file)
+--       ),
+--       actions = {
+--         ["default"] = function(selected)
+--           -- Clean up temp file
+--           vim.fn.delete(temp_file)
+--           if selected and selected[1] then
+--             local line_num = tonumber(selected[1]:match("^(%d+)"))
+--             if line_num then
+--               -- Scroll to line
+--               vim.schedule(function()
+--                 if api.nvim_buf_is_valid(buf) then
+--                   api.nvim_buf_call(buf, function()
+--                     vim.cmd('normal! ' .. line_num .. 'G')
+--                   end)
+--                 end
+--               end)
+--             end
+--           end
+--         end,
+--         ["ctrl-c"] = function()
+--           vim.fn.delete(temp_file)
+--         end
+--       },
+--       winopts = {
+--         height = 0.4,
+--         width = 0.6,
+--         preview = {
+--           hidden = 'hidden'
+--         }
+--       }
+--     })
+--   end, { silent = true, desc = "Search in terminal" })
+--
+--   -- Terminal split with improved options
+--   vim.keymap.set('t', '<C-\\>', function()
+--     local current = api.nvim_get_current_buf()
+--     if not current or not self.terminals[current] then return end
+--
+--     -- Ensure current terminal is valid
+--     if not api.nvim_buf_is_valid(current) then
+--       vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
+--       return
+--     end
+--
+--     -- Get current terminal info
+--     local current_term = self.terminals[current]
+--     if not current_term then return end
+--
+--     -- Create new terminal with similar settings
+--     local term_opts = {
+--       cmd = current_term.cmd,
+--       type = 'vertical',
+--       env = current_term.env,
+--       cwd = current_term.cwd,
+--       -- Preserve window dimensions
+--       float_width = current_term.float_width,
+--       float_height = current_term.float_height
+--     }
+--
+--     -- Create new terminal safely
+--     vim.schedule(function()
+--       local new_buf = self:create_terminal(term_opts)
+--       if new_buf then
+--         -- Sync some settings between terminals
+--         if current_term.on_exit then
+--           self.terminals[new_buf].on_exit = current_term.on_exit
+--         end
+--       end
+--     end)
+--   end, { silent = true, desc = "Split terminal" })
+--
+--   -- Quick terminal selection with improved UI
+--   vim.keymap.set('n', '<A-j>', function()
+--     local terms = vim.tbl_keys(self.terminals)
+--     if #terms == 0 then
+--       vim.notify("No active terminals", vim.log.levels.INFO)
+--       return
+--     end
+--
+--     local items = {}
+--     for _, buf in ipairs(terms) do
+--       -- Ensure buffer is valid
+--       if api.nvim_buf_is_valid(buf) then
+--         local term = self.terminals[buf]
+--         if term then
+--           local cmd_name = term.cmd and vim.fn.fnamemodify(term.cmd, ":t") or "terminal"
+--           local status = api.nvim_buf_get_var(buf, "term_title") or ""
+--
+--           table.insert(items, {
+--             name = string.format("%s (%s) %s",
+--               cmd_name,
+--               term.type,
+--               status ~= "" and "- " .. status or ""
+--             ),
+--             buf = buf,
+--             cmd = term.cmd,
+--             type = term.type
+--           })
+--         end
+--       end
+--     end
+--
+--     if #items == 0 then
+--       vim.notify("No valid terminals found", vim.log.levels.INFO)
+--       return
+--     end
+--
+--     -- Sort items by most recently used
+--     table.sort(items, function(a, b)
+--       local a_time = api.nvim_buf_get_var(a.buf, "term_last_used") or 0
+--       local b_time = api.nvim_buf_get_var(b.buf, "term_last_used") or 0
+--       return a_time > b_time
+--     end)
+--
+--     require('fzf-lua').fzf_exec(
+--       vim.tbl_map(function(item) return item.name end, items),
+--       {
+--         prompt = "Quick Terminal > ",
+--         actions = {
+--           ["default"] = function(selected)
+--             if not selected or #selected == 0 then return end
+--             local selection = selected[1]
+--             for _, item in ipairs(items) do
+--               if item.name == selection then
+--                 -- Update last used time
+--                 pcall(api.nvim_buf_set_var, item.buf, "term_last_used", vim.fn.localtime())
+--                 -- Show terminal
+--                 self:show_terminal(item.buf)
+--                 break
+--               end
+--             end
+--           end,
+--           ["ctrl-x"] = function(selected)
+--             if not selected or #selected == 0 then return end
+--             local selection = selected[1]
+--             for _, item in ipairs(items) do
+--               if item.name == selection then
+--                 self:safe_close_terminal(item.buf)
+--                 break
+--               end
+--             end
+--           end
+--         },
+--         winopts = {
+--           height = 0.4,
+--           width = 0.6,
+--           preview = {
+--             hidden = 'hidden'
+--           }
+--         }
+--       }
+--     )
+--   end, { silent = true, desc = "Quick terminal selection" })
+-- end
 
-  -- Terminal search with improved buffer handling
-  vim.keymap.set('t', '<C-f>', function()
-    local buf = api.nvim_get_current_buf()
-    if not buf or not self.terminals[buf] then return end
-
-    -- Ensure buffer is valid
-    if not api.nvim_buf_is_valid(buf) then
-      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
-      return
-    end
-
-    -- Get buffer content for searching
-    local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
-    if #lines == 0 then
-      vim.notify("Terminal buffer is empty", vim.log.levels.INFO)
-      return
-    end
-
-    -- Create temporary file for searching
-    local temp_file = vim.fn.tempname()
-    vim.fn.writefile(lines, temp_file)
-
-    require('fzf-lua').live_grep({
-      prompt = "Search Terminal > ",
-      cwd = vim.fn.getcwd(),
-      search = "",
-      cmd = string.format(
-        "grep -R --line-buffered --color=never -n '' %s",
-        vim.fn.shellescape(temp_file)
-      ),
-      actions = {
-        ["default"] = function(selected)
-          -- Clean up temp file
-          vim.fn.delete(temp_file)
-          if selected and selected[1] then
-            local line_num = tonumber(selected[1]:match("^(%d+)"))
-            if line_num then
-              -- Scroll to line
-              vim.schedule(function()
-                if api.nvim_buf_is_valid(buf) then
-                  api.nvim_buf_call(buf, function()
-                    vim.cmd('normal! ' .. line_num .. 'G')
-                  end)
-                end
-              end)
-            end
-          end
-        end,
-        ["ctrl-c"] = function()
-          vim.fn.delete(temp_file)
-        end
-      },
-      winopts = {
-        height = 0.4,
-        width = 0.6,
-        preview = {
-          hidden = 'hidden'
-        }
-      }
-    })
-  end, { silent = true, desc = "Search in terminal" })
-
-  -- Terminal split with improved options
-  vim.keymap.set('t', '<C-\\>', function()
-    local current = api.nvim_get_current_buf()
-    if not current or not self.terminals[current] then return end
-
-    -- Ensure current terminal is valid
-    if not api.nvim_buf_is_valid(current) then
-      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
-      return
-    end
-
-    -- Get current terminal info
-    local current_term = self.terminals[current]
-    if not current_term then return end
-
-    -- Create new terminal with similar settings
-    local term_opts = {
-      cmd = current_term.cmd,
-      type = 'vertical',
-      env = current_term.env,
-      cwd = current_term.cwd,
-      -- Preserve window dimensions
-      float_width = current_term.float_width,
-      float_height = current_term.float_height
-    }
-
-    -- Create new terminal safely
-    vim.schedule(function()
-      local new_buf = self:create_terminal(term_opts)
-      if new_buf then
-        -- Sync some settings between terminals
-        if current_term.on_exit then
-          self.terminals[new_buf].on_exit = current_term.on_exit
-        end
-      end
-    end)
-  end, { silent = true, desc = "Split terminal" })
-
-  -- Quick terminal selection with improved UI
-  vim.keymap.set('n', '<A-j>', function()
-    local terms = vim.tbl_keys(self.terminals)
-    if #terms == 0 then
-      vim.notify("No active terminals", vim.log.levels.INFO)
-      return
-    end
-
-    local items = {}
-    for _, buf in ipairs(terms) do
-      -- Ensure buffer is valid
-      if api.nvim_buf_is_valid(buf) then
-        local term = self.terminals[buf]
-        if term then
-          local cmd_name = term.cmd and vim.fn.fnamemodify(term.cmd, ":t") or "terminal"
-          local status = api.nvim_buf_get_var(buf, "term_title") or ""
-
-          table.insert(items, {
-            name = string.format("%s (%s) %s",
-              cmd_name,
-              term.type,
-              status ~= "" and "- " .. status or ""
-            ),
-            buf = buf,
-            cmd = term.cmd,
-            type = term.type
-          })
-        end
-      end
-    end
-
-    if #items == 0 then
-      vim.notify("No valid terminals found", vim.log.levels.INFO)
-      return
-    end
-
-    -- Sort items by most recently used
-    table.sort(items, function(a, b)
-      local a_time = api.nvim_buf_get_var(a.buf, "term_last_used") or 0
-      local b_time = api.nvim_buf_get_var(b.buf, "term_last_used") or 0
-      return a_time > b_time
-    end)
-
-    require('fzf-lua').fzf_exec(
-      vim.tbl_map(function(item) return item.name end, items),
-      {
-        prompt = "Quick Terminal > ",
-        actions = {
-          ["default"] = function(selected)
-            if not selected or #selected == 0 then return end
-            local selection = selected[1]
-            for _, item in ipairs(items) do
-              if item.name == selection then
-                -- Update last used time
-                pcall(api.nvim_buf_set_var, item.buf, "term_last_used", vim.fn.localtime())
-                -- Show terminal
-                self:show_terminal(item.buf)
-                break
-              end
-            end
-          end,
-          ["ctrl-x"] = function(selected)
-            if not selected or #selected == 0 then return end
-            local selection = selected[1]
-            for _, item in ipairs(items) do
-              if item.name == selection then
-                self:safe_close_terminal(item.buf)
-                break
-              end
-            end
-          end
-        },
-        winopts = {
-          height = 0.4,
-          width = 0.6,
-          preview = {
-            hidden = 'hidden'
-          }
-        }
-      }
-    )
-  end, { silent = true, desc = "Quick terminal selection" })
-end
-
-function Neaterm:send_text_with_paste_mode(text, filetype)
-  if not text or text == "" then return end
-
-  local paste_config = self.opts.paste_mode.commands[filetype]
-      or self.opts.paste_mode.commands.default
-
-  if self.opts.paste_mode.enabled and paste_config then
-    -- Send paste start command
-    if paste_config.start ~= "" then
-      self:send_text(paste_config.start)
-      -- Small delay to ensure proper paste mode
-      vim.defer_fn(function()
-        self:send_text(text)
-        -- Send paste finish command if needed
-        if paste_config.finish ~= "" then
-          self:send_text(paste_config.finish)
-        end
-      end, 50)
-    else
-      self:send_text(text)
-    end
-  else
-   self:send_text(text)
-  end
-end
+-- function Neaterm:send_text_with_paste_mode(text, filetype)
+--   if not text or text == "" then return end
+--
+--   local paste_config = self.opts.paste_mode.commands[filetype]
+--       or self.opts.paste_mode.commands.default
+--
+--   if self.opts.paste_mode.enabled and paste_config then
+--     -- Send paste start command
+--     if paste_config.start ~= "" then
+--       self:send_text(paste_config.start)
+--       -- Small delay to ensure proper paste mode
+--       vim.defer_fn(function()
+--         self:send_text(text)
+--         -- Send paste finish command if needed
+--         if paste_config.finish ~= "" then
+--           self:send_text(paste_config.finish)
+--         end
+--       end, 50)
+--     else
+--       self:send_text(text)
+--     end
+--   else
+--     self:send_text(text)
+--   end
+-- end
 
 function Neaterm:send_selection_to_repl()
   if not self.current_repl then
@@ -1323,7 +1323,7 @@ function Neaterm:safe_close_terminal(buf)
   if not buf or not self.terminals[buf] then return end
 
   local term = self.terminals[buf]
-  
+
   -- Try to terminate the job gracefully
   if term.job_id then
     pcall(vim.fn.jobstop, term.job_id)
@@ -1341,12 +1341,12 @@ function Neaterm:safe_close_terminal(buf)
     end
     -- Remove from terminals table
     self.terminals[buf] = nil
-    
+
     -- Update current terminal if needed
     if self.current_terminal == buf then
       self.current_terminal = next(self.terminals)
     end
-    
+
     -- Update UI
     ui.update_bar(self)
   end, 100)
@@ -1367,7 +1367,7 @@ end
 function Neaterm:update_float_position(win, changes)
   if not win or not api.nvim_win_is_valid(win) then return end
 
-  local bounds =self:get_window_bounds(win)
+  local bounds = self:get_window_bounds(win)
   if bounds.relative ~= 'editor' then return end
 
   -- Apply changes with bounds checking
@@ -1484,20 +1484,20 @@ function Neaterm:resize_terminal(direction)
 end
 
 -- Send buffer content to REPL
-function Neaterm:send_buffer_to_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-  local text = table.concat(lines, "\n")
-
-  if text ~= "" then
-    self:add_to_history(text, self.current_repl.filetype)
-    self:send_text(text)
-  end
-end
+-- function Neaterm:send_buffer_to_repl()
+--   if not self.current_repl then
+--     vim.notify("No active REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+--   local text = table.concat(lines, "\n")
+--
+--   if text ~= "" then
+--     self:add_to_history(text, self.current_repl.filetype)
+--     self:send_text(text)
+--   end
+-- end
 
 -- Send selection to REPL
 -- function Neaterm:send_selection_to_repl()
@@ -1518,7 +1518,7 @@ function Neaterm:add_to_history(cmd, filetype)
   if not self.history[filetype] then
     self.history[filetype] = {}
   end
-  
+
   -- Remove duplicate if exists
   for i, item in ipairs(self.history[filetype]) do
     if item == cmd then
@@ -1526,15 +1526,15 @@ function Neaterm:add_to_history(cmd, filetype)
       break
     end
   end
-  
+
   -- Add to start of history
   table.insert(self.history[filetype], 1, cmd)
-  
+
   -- Limit history size
   while #self.history[filetype] > 100 do
     table.remove(self.history[filetype])
   end
-  
+
   -- Save history
   self:save_repl_history()
 end
@@ -1573,27 +1573,27 @@ function Neaterm:setup_terminal_keymaps(buf)
   if not buf or not vim.api.nvim_buf_is_valid(buf) then return end
 
   local opts = { buffer = buf, silent = true }
-  
+
   -- Terminal mode mappings
   local term_maps = {
     -- Basic operations
-    { mode = 't', key = self.opts.keymaps.toggle, func = function() self:toggle_terminal() end, desc = "Toggle terminal" },
-    { mode = 't', key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close terminal" },
-    
+    { mode = 't', key = self.opts.keymaps.toggle,       func = function() self:toggle_terminal() end,        desc = "Toggle terminal" },
+    { mode = 't', key = self.opts.keymaps.close,        func = function() self:close_current_terminal() end, desc = "Close terminal" },
+
     -- Navigation
-    { mode = 't', key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal" },
-    { mode = 't', key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal" },
-    
+    { mode = 't', key = self.opts.keymaps.next,         func = function() self:next_terminal() end,          desc = "Next terminal" },
+    { mode = 't', key = self.opts.keymaps.prev,         func = function() self:prev_terminal() end,          desc = "Previous terminal" },
+
     -- Movement
-    { mode = 't', key = self.opts.keymaps.move_up, func = function() self:move_terminal('up') end, desc = "Move up" },
-    { mode = 't', key = self.opts.keymaps.move_down, func = function() self:move_terminal('down') end, desc = "Move down" },
-    { mode = 't', key = self.opts.keymaps.move_left, func = function() self:move_terminal('left') end, desc = "Move left" },
-    { mode = 't', key = self.opts.keymaps.move_right, func = function() self:move_terminal('right') end, desc = "Move right" },
-    
+    { mode = 't', key = self.opts.keymaps.move_up,      func = function() self:move_terminal('up') end,      desc = "Move up" },
+    { mode = 't', key = self.opts.keymaps.move_down,    func = function() self:move_terminal('down') end,    desc = "Move down" },
+    { mode = 't', key = self.opts.keymaps.move_left,    func = function() self:move_terminal('left') end,    desc = "Move left" },
+    { mode = 't', key = self.opts.keymaps.move_right,   func = function() self:move_terminal('right') end,   desc = "Move right" },
+
     -- Resizing
-    { mode = 't', key = self.opts.keymaps.resize_up, func = function() self:resize_terminal('up') end, desc = "Resize up" },
-    { mode = 't', key = self.opts.keymaps.resize_down, func = function() self:resize_terminal('down') end, desc = "Resize down" },
-    { mode = 't', key = self.opts.keymaps.resize_left, func = function() self:resize_terminal('left') end, desc = "Resize left" },
+    { mode = 't', key = self.opts.keymaps.resize_up,    func = function() self:resize_terminal('up') end,    desc = "Resize up" },
+    { mode = 't', key = self.opts.keymaps.resize_down,  func = function() self:resize_terminal('down') end,  desc = "Resize down" },
+    { mode = 't', key = self.opts.keymaps.resize_left,  func = function() self:resize_terminal('left') end,  desc = "Resize left" },
     { mode = 't', key = self.opts.keymaps.resize_right, func = function() self:resize_terminal('right') end, desc = "Resize right" },
   }
 
@@ -1605,12 +1605,12 @@ function Neaterm:setup_terminal_keymaps(buf)
   -- Normal mode mappings for terminal buffer
   local normal_maps = {
     -- Basic operations
-    { mode = 'n', key = self.opts.keymaps.toggle, func = function() self:toggle_terminal() end, desc = "Toggle terminal" },
-    { mode = 'n', key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close terminal" },
-    
+    { mode = 'n', key = self.opts.keymaps.toggle, func = function() self:toggle_terminal() end,        desc = "Toggle terminal" },
+    { mode = 'n', key = self.opts.keymaps.close,  func = function() self:close_current_terminal() end, desc = "Close terminal" },
+
     -- Navigation
-    { mode = 'n', key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal" },
-    { mode = 'n', key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal" },
+    { mode = 'n', key = self.opts.keymaps.next,   func = function() self:next_terminal() end,          desc = "Next terminal" },
+    { mode = 'n', key = self.opts.keymaps.prev,   func = function() self:prev_terminal() end,          desc = "Previous terminal" },
   }
 
   -- Set normal mode mappings
