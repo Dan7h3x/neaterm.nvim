@@ -751,542 +751,199 @@ function Neaterm:safe_close_repl()
 end
 
 -- Add this method to the Neaterm class
--- function Neaterm:setup_terminal_settings(win, buf)
---   -- Window-specific settings
---   local win_opts = {
---     number = false,
---     relativenumber = false,
---     signcolumn = "no",
---     wrap = false,
---   }
---
---   for opt, value in pairs(win_opts) do
---     api.nvim_win_set_option(win, opt, value)
---   end
---
---   -- Buffer-specific settings
---   local buf_opts = {
---     bufhidden = "hide",
---     filetype = "neaterm",
---     buflisted = false,
---   }
---
---   for opt, value in pairs(buf_opts) do
---     api.nvim_buf_set_option(buf, opt, value)
---   end
---
---   -- Terminal-specific keymaps with descriptions
---   local term_maps = {
---     ['<ESC><ESC>'] = {
---       cmd = '<C-\\><C-n>',
---       desc = 'Exit terminal insert mode'
---     },
---     ['<C-\\><C-n>'] = {
---       cmd = '<Cmd>startinsert<CR>',
---       desc = 'Enter terminal insert mode'
---     },
---     ['<C-h>'] = {
---       cmd = '<Cmd>wincmd h<CR>',
---       desc = 'Move to left window'
---     },
---     ['<C-j>'] = {
---       cmd = '<Cmd>wincmd j<CR>',
---       desc = 'Move to bottom window'
---     },
---     ['<C-k>'] = {
---       cmd = '<Cmd>wincmd k<CR>',
---       desc = 'Move to top window'
---     },
---     ['<C-l>'] = {
---       cmd = '<Cmd>wincmd l<CR>',
---       desc = 'Move to right window'
---     },
---     ['<C-w>'] = {
---       cmd = '<C-\\><C-n><C-w>',
---       desc = 'Window command prefix'
---     }
---   }
---
---   for lhs, map in pairs(term_maps) do
---     vim.keymap.set('t', lhs, map.cmd, {
---       buffer = buf,
---       silent = true,
---       desc = map.desc
---     })
---   end
---
---   -- Add new features
---   -- Auto-resize on terminal window focus
---   api.nvim_create_autocmd("WinEnter", {
---     buffer = buf,
---     callback = function()
---       if vim.bo[buf].buftype == 'terminal' then
---         vim.cmd('startinsert')
---       end
---     end,
---     desc = "Auto-enter insert mode in terminal"
---   })
---
---   -- Add terminal title
---   -- if term.cmd then
---   --   local title = term.cmd:match("([^/]+)$") or "terminal"
---   --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
---   -- end
--- end
+function Neaterm:setup_vscode_features()
+ -- Ensurerequired dependencies
+  local has_fzf = pcall(require, 'fzf-lua')
+  if not has_fzf then
+    vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
+    return
+  end
 
--- Add navigation methods
-function Neaterm:next_terminal()
-  local terminals = vim.tbl_keys(self.terminals)
-  if #terminals == 0 then return end
+  -- Terminal search with improved buffer handling
+  vim.keymap.set('t', '<C-f>', function()
+    local buf = api.nvim_get_current_buf()
+    if not buf or not self.terminals[buf] then return end
 
-  local current_index = 1
-  for i, buf in ipairs(terminals) do
-    if buf == self.current_terminal then
-      current_index = i
-      break
+    -- Ensure buffer is valid
+    if not api.nvim_buf_is_valid(buf) then
+      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
+      return
     end
-  end
 
-  local next_index = current_index % #terminals + 1
-  self:show_terminal(terminals[next_index])
-end
-
-function Neaterm:prev_terminal()
-  local terminals = vim.tbl_keys(self.terminals)
-  if #terminals == 0 then return end
-
-  local current_index = 1
-  for i, buf in ipairs(terminals) do
-    if buf == self.current_terminal then
-      current_index = i
-      break
+    -- Get buffer content for searching
+    local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+    if #lines == 0 then
+      vim.notify("Terminal buffer is empty", vim.log.levels.INFO)
+      return
     end
-  end
 
-  local prev_index = (current_index - 2) % #terminals + 1
-  self:show_terminal(terminals[prev_index])
-end
+    -- Create temporary file for searching
+    local temp_file =vim.fn.tempname()
+    vim.fn.writefile(lines, temp_file)
 
--- Add movement and resize methods
-function Neaterm:move_terminal(direction)
-  local term = self.terminals[self.current_terminal]
-  if not term or not term.window then return end
-
-  local win = term.window
-  local config = api.nvim_win_get_config(win)
-
-  if config.relative == 'editor' then -- Floating window
-    local changes = {
-      up = { row = -self.opts.move_amount },
-      down = { row = self.opts.move_amount },
-      left = { col = -self.opts.move_amount },
-      right = { col = self.opts.move_amount }
-    }
-
-    self:update_float_position(win, changes[direction] or {})
-  else -- Regular window
-    local directions = {
-      up = 'K',
-      down = 'J',
-      left = 'H',
-      right = 'L'
-    }
-    vim.cmd('wincmd ' .. directions[direction])
-  end
-end
-
-function Neaterm:resize_terminal(direction)
-  local term = self.terminals[self.current_terminal]
-  if not term or not term.window then return end
-
-  local win = term.window
-  local config = api.nvim_win_get_config(win)
-
-  if config.relative == 'editor' then -- Floating window
-    local changes = {
-      up = { height = -self.opts.resize_amount },
-      down = { height = self.opts.resize_amount },
-      left = { width = -self.opts.resize_amount },
-      right = { width = self.opts.resize_amount }
-    }
-
-    self:update_float_position(win, changes[direction] or {})
-  else -- Regular window
-    local cmd = {
-      up = 'resize -' .. self.opts.resize_amount,
-      down = 'resize +' .. self.opts.resize_amount,
-      left = 'vertical resize -' .. self.opts.resize_amount,
-      right = 'vertical resize +' .. self.opts.resize_amount
-    }
-    vim.cmd(cmd[direction])
-  end
-end
-
--- Add these methods to the Neaterm class
-
--- Send buffer content to REPL
-function Neaterm:send_buffer_to_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-  local text = table.concat(lines, "\n")
-
-  if text ~= "" then
-    self:add_to_history(text, self.current_repl.filetype)
-    self:send_text(text)
-  end
-end
-
--- Send selection to REPL
-function Neaterm:send_selection_to_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local text = utils.get_visual_selection()
-  if text ~= "" then
-    self:add_to_history(text, self.current_repl.filetype)
-    self:send_text_with_paste_mode(text, self.current_repl.filetype)
-  end
-end
-
--- Add to history with proper checks
-function Neaterm:add_to_history(text, filetype)
-  if not text or text == "" or not filetype then return end
-
-  if not self.history[filetype] then
-    self.history[filetype] = {}
-  end
-
-  -- Remove duplicate if exists
-  for i, item in ipairs(self.history[filetype]) do
-    if item == text then
-      table.remove(self.history[filetype], i)
-      break
-    end
-  end
-
-  -- Add to start of history
-  table.insert(self.history[filetype], 1, text)
-
-  -- Limit history size
-  while #self.history[filetype] > (self.opts.repl.max_history or 100) do
-    table.remove(self.history[filetype])
-  end
-
-  -- Save history if enabled
-  if self.opts.repl.save_history then
-    self:save_repl_history()
-  end
-end
-
--- Clear REPL
-function Neaterm:clear_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  self:send_text("\x0c") -- Send Ctrl-L to clear screen
-end
-
--- Restart REPL
-function Neaterm:restart_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local current_config = {
-    cmd = self.current_repl.config.cmd,
-    type = self.current_repl.type,
-    filetype = self.current_repl.filetype
-  }
-
-  self:safe_close_repl()
-
-  vim.defer_fn(function()
-    self:start_repl(current_config)
-  end, 100)
-end
-
--- Focus terminal bar
-function Neaterm:focus_bar()
-  if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
-    api.nvim_set_current_win(self.bar_win)
-  end
-end
-
--- Toggle terminal
-function Neaterm:toggle_terminal()
-  if not self.current_terminal or not api.nvim_buf_is_valid(self.current_terminal) then
-    self:create_terminal({ type = self.opts.default_type or 'float' })
-    return
-  end
-
-  local term = self.terminals[self.current_terminal]
-  if not term then
-    self:create_terminal({ type = self.opts.default_type or 'float' })
-    return
-  end
-
-  local win = term.window
-  if not win or not api.nvim_win_is_valid(win) then
-    -- Window was closed, create new one
-    local new_win = utils.create_window(self.opts, { type = term.type }, self.current_terminal)
-    term.window = new_win
-    vim.cmd('startinsert')
-  else
-    -- Window exists, hide it
-    api.nvim_win_hide(win)
-  end
-end
-
--- Close current terminal
-function Neaterm:close_current_terminal()
-  if self.current_terminal then
-    local term = self.terminals[self.current_terminal]
-    if term and term.window and api.nvim_win_is_valid(term.window) then
-      api.nvim_win_close(term.window, true)
-    end
-    self:cleanup_terminal(self.current_terminal)
-  end
-end
-
--- Show terminal
-function Neaterm:show_terminal(buf)
-  if not buf or not self.terminals[buf] then return end
-
-  local term = self.terminals[buf]
-  if not api.nvim_win_is_valid(term.window) then
-    -- Recreate window if invalid
-    term.window = utils.create_window(self.opts, { type = term.type }, buf)
-  end
-
-  api.nvim_set_current_win(term.window)
-  self.current_terminal = buf
-  ui.update_bar(self)
-end
-
--- Add REPL output parsing
-function Neaterm:parse_repl_output(output, filetype)
-  local config = self.repl_configs[filetype]
-  if not config then return {} end
-
-  local parsers = {
-    python = function(out)
-      local vars = {}
-      for line in out:gmatch("[^\r\n]+") do
-        -- Match IPython's whos output format
-        local var_type, name, size, info = line:match("(%w+)%s+(%w+)%s+(%d+)%s*(.*)")
-        if name then
-          vars[#vars + 1] = {
-            name = name,
-            type = var_type,
-            size = size,
-            info = info:gsub("^%s*(.-)%s*$", "%1"), -- trim
-            display = string.format("%-20s │ %-10s │ %s", name, var_type, size)
-          }
+    require('fzf-lua').live_grep({
+      prompt = "Search Terminal > ",
+      cwd = vim.fn.getcwd(),
+      search = "",
+      cmd = string.format(
+        "grep -R --line-buffered --color=never -n '' %s",
+        vim.fn.shellescape(temp_file)
+      ),
+      actions = {
+        ["default"] = function(selected)
+          -- Clean up temp file
+          vim.fn.delete(temp_file)
+          if selected and selected[1] then
+            local line_num = tonumber(selected[1]:match("^(%d+)"))
+            if line_num then
+              -- Scroll to line
+              vim.schedule(function()
+                if api.nvim_buf_is_valid(buf) then
+                  api.nvim_buf_call(buf, function()
+                    vim.cmd('normal! ' .. line_num .. 'G')
+                  end)
+                end
+              end)
+            end
+          end
+        end,
+        ["ctrl-c"] = function()
+          vim.fn.delete(temp_file)
         end
-      end
-      return vars
-    end,
-
-    r = function(out)
-      local vars = {}
-      -- Parse ls() output and get more info using str()
-      for name in out:gmatch("[%w_.]+") do
-        -- Use str() to get type information
-        local str_cmd = string.format("str(%s)", name)
-        self:send_text(str_cmd)
-        -- TODO: Implement proper output capture for R
-        vars[#vars + 1] = {
-          name = name,
-          type = "object", -- This should be parsed from str() output
-          display = string.format("%-20s │ %-10s", name, "object")
+      },
+      winopts = {
+        height = 0.4,
+        width = 0.6,
+        preview = {
+          hidden = 'hidden'
         }
-      end
-      return vars
-    end,
+      }
+    })
+  end, { silent = true, desc = "Search in terminal" })
 
-    julia = function(out)
-      local vars = {}
-      for line in out:gmatch("[^\r\n]+") do
-        local name = line:match("^([%w_]+)")
-        if name then
-          -- Get type information using typeof()
-          local type_cmd = string.format("typeof(%s)", name)
-          self:send_text(type_cmd)
-          -- TODO: Implement proper output capture for Julia
-          vars[#vars + 1] = {
-            name = name,
-            type = "variable",
-            display = string.format("%-20s │ %-10s", name, "variable")
-          }
+  -- Terminal split with improved options
+  vim.keymap.set('t', '<C-\\>', function()
+    local current = api.nvim_get_current_buf()
+    if not current or not self.terminals[current] then return end
+
+    -- Ensure current terminal is valid
+    if not api.nvim_buf_is_valid(current) then
+      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
+      return
+    end
+
+    -- Get current terminal info
+    local current_term = self.terminals[current]
+    if not current_term then return end
+
+    -- Create new terminal with similar settings
+    local term_opts = {
+      cmd = current_term.cmd,
+      type = 'vertical',
+      env = current_term.env,
+      cwd = current_term.cwd,
+      -- Preserve window dimensions
+      float_width = current_term.float_width,
+      float_height = current_term.float_height
+    }
+
+    -- Create new terminal safely
+    vim.schedule(function()
+      local new_buf = self:create_terminal(term_opts)
+      if new_buf then
+        -- Sync some settings between terminals
+        if current_term.on_exit then
+          self.terminals[new_buf].on_exit = current_term.on_exit
         end
       end
-      return vars
+    end)
+  end, { silent = true, desc = "Split terminal" })
+
+  -- Quick terminal selection with improved UI
+  vim.keymap.set('n', '<A-j>', function()
+    local terms = vim.tbl_keys(self.terminals)
+    if #terms == 0 then
+      vim.notify("No active terminals", vim.log.levels.INFO)
+      return
     end
-  }
 
-  -- Use custom parser if defined in config
-  if config.parse_output then
-    return config.parse_output(output)
-  end
-
-  -- Use default parser for the language if available
-  return (parsers[filetype] or function() return {} end)(output)
-end
-
--- Add this helper function to safely close windows and buffers
-function Neaterm:safe_close_terminal(buf)
-  if not buf or not self.terminals[buf] then return end
-
-  local term = self.terminals[buf]
-  if term.job_id then
-    -- Try to terminate the job gracefully
-    pcall(vim.fn.jobstop, term.job_id)
-  end
-
-  vim.defer_fn(function()
-    self:cleanup_terminal(buf)
-  end, 50)
-end
-
--- Add these helper functions for floating window management
-function Neaterm:get_window_bounds(win)
-  local config = api.nvim_win_get_config(win)
-  return {
-    row = type(config.row) == "table" and config.row[false] or config.row,
-    col = type(config.col) == "table" and config.col[false] or config.col,
-    width = config.width,
-    height = config.height,
-    relative = config.relative
-  }
-end
-
-function Neaterm:update_float_position(win, changes)
-  if not win or not api.nvim_win_is_valid(win) then return end
-
-  local bounds = self:get_window_bounds(win)
-  if bounds.relative ~= 'editor' then return end
-
-  -- Apply changes with bounds checking
-  local new_config = {
-    relative = 'editor',
-    width = bounds.width,
-    height = bounds.height,
-    row = bounds.row,
-    col = bounds.col,
-  }
-
-  if changes.row then
-    new_config.row = math.max(0, math.min(bounds.row + changes.row, vim.o.lines - bounds.height - 2))
-  end
-  if changes.col then
-    new_config.col = math.max(0, math.min(bounds.col + changes.col, vim.o.columns - bounds.width - 2))
-  end
-  if changes.width then
-    new_config.width = math.max(20, math.min(bounds.width + changes.width, vim.o.columns - bounds.col - 2))
-  end
-  if changes.height then
-    new_config.height = math.max(3, math.min(bounds.height + changes.height, vim.o.lines - bounds.row - 2))
-  end
-
-  api.nvim_win_set_config(win, new_config)
-end
-
--- Add new features
-function Neaterm:setup_features()
-  -- Terminal status line
-  vim.opt.statusline = [[%{b:term_title}%=%{get(b:,'term_status','')}]]
-
-  -- Terminal completion
-  vim.opt.complete:append('t')
-
-  -- Add terminal picker
-  function self:show_terminal_picker()
-    local terminals = {}
-    for buf, term in pairs(self.terminals) do
+    local items = {}
+    for _, buf in ipairs(terms) do
+      -- Ensure buffer is valid
       if api.nvim_buf_is_valid(buf) then
-        local name = api.nvim_buf_get_name(buf):match("term://(.+)$") or "terminal"
-        table.insert(terminals, {
-          name = name,
-          buf = buf,
-          type = term.type,
-          cmd = term.cmd
-        })
+        local term = self.terminals[buf]
+        if term then
+          local cmd_name = term.cmd and vim.fn.fnamemodify(term.cmd, ":t") or "terminal"
+          local status = api.nvim_buf_get_var(buf, "term_title") or ""
+          
+          table.insert(items, {
+            name = string.format("%s (%s) %s", 
+              cmd_name,
+              term.type,
+              status ~= "" and "- " .. status or ""
+            ),
+            buf = buf,
+            cmd = term.cmd,
+            type = term.type
+          })
+        end
       end
     end
+
+    if #items == 0 then
+      vim.notify("No valid terminals found", vim.log.levels.INFO)
+      return
+    end
+
+    -- Sort items by most recently used
+    table.sort(items, function(a, b)
+      local a_time = api.nvim_buf_get_var(a.buf, "term_last_used") or 0
+      local b_time = api.nvim_buf_get_var(b.buf, "term_last_used") or 0
+      return a_time > b_time
+    end)
 
     require('fzf-lua').fzf_exec(
-      vim.tbl_map(function(t)
-        return string.format("%-30s │ %-15s │ %s",
-          t.name,
-          t.type or "normal",
-          t.cmd or ""
-        )
-      end, terminals),
+      vim.tbl_map(function(item) return item.name end, items),
       {
-        prompt = "Terminals > ",
+        prompt = "Quick Terminal > ",
         actions = {
           ["default"] = function(selected)
-            local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
-            for _, term in ipairs(terminals) do
-              if term.name == name then
-                self:show_terminal(term.buf)
+            if not selected or #selected == 0 then return end
+            local selection = selected[1]
+            for _, item in ipairs(items) do
+              if item.name == selection then
+                -- Update last used time
+                pcall(api.nvim_buf_set_var, item.buf, "term_last_used", vim.fn.localtime())
+                -- Show terminal
+                self:show_terminal(item.buf)
+                break
+              end
+            end
+          end,
+          ["ctrl-x"] = function(selected)
+            if not selected or #selected == 0 then return end
+            local selection = selected[1]
+            for _, item in ipairs(items) do
+              if item.name == selection then
+                self:safe_close_terminal(item.buf)
                 break
               end
             end
           end
         },
-        fzf_opts = {
-          ["--delimiter"] = "│",
-          ["--with-nth"] = "1,2,3",
-          ["--header"] = "Name                           │ Type           │ Command"
+        winopts = {
+          height = 0.4,
+          width = 0.6,
+          preview = {
+            hidden = 'hidden'
+          }
         }
       }
     )
-  end
-
-  -- Add terminal picker keymap
-  vim.keymap.set('n', self.opts.keymaps.terminal_picker.key, function()
-    self:show_terminal_picker()
-  end, {
-    silent = true,
-    desc = self.opts.keymaps.terminal_picker.desc
-  })
+  end, { silent = true, desc = "Quick terminal selection" })
 end
 
-function Neaterm:send_text_with_paste_mode(text, filetype)
-  if not text or text == "" then return end
-  
-  local paste_config = self.opts.paste_mode.commands[filetype] 
-    or self.opts.paste_mode.commands.default
-
-  if self.opts.paste_mode.enabled and paste_config then
-    -- Send paste start command
-    if paste_config.start ~= "" then
-      self:send_text(paste_config.start)
-      -- Small delay to ensure proper paste mode
-      vim.defer_fn(function()
-        self:send_text(text)
-        -- Send paste end command if needed
-        if paste_config.end ~= "" then
-          self:send_text(paste_config.end)
-        end
-      end, 50)
-    else
-      self:send_text(text)
-    end
-  else
-    self:send_text(text)
-  end
-end
+return Neaterm
 
 -- Add VSCode-like features
 function Neaterm:setup_vscode_features()
