@@ -22,6 +22,7 @@ local default_opts = {
   min_height = 3,
 
   -- Default keymaps
+  use_default_keymaps = true,
   keymaps = {
     toggle = '<A-t>',
     new_vertical = '<C-\\>',
@@ -47,13 +48,6 @@ local default_opts = {
     repl_history = '<leader>rh',
     repl_variables = '<leader>rv',
     repl_restart = '<leader>rR',
-    -- VSCode-like features
-    search_terminal = '<C-f>',
-    split_terminal = '<C-\\>',
-    quick_terminal = '<A-j>',
-    clear_terminal = '<C-l>',
-    copy_terminal = '<C-S-c>',
-    paste_terminal = '<C-S-v>',
   },
 
   -- REPL configurations
@@ -113,40 +107,6 @@ local default_opts = {
       inspect_variable_cmd = "echo $",
       exit_cmd = "exit",
     },
-  },
-
-  -- Add new options
-  use_default_keymaps = true,
-  paste_mode = {
-    enabled = true,
-    trim_prompt = true,        -- Remove prompt characters when pasting
-    remove_empty_lines = true, -- Remove empty lines when pasting
-    commands = {
-      python = {
-        start = '%paste',
-        finish = '',
-      },
-      ipython = {
-        start = '%paste',
-        finish = '',
-      },
-      r = {
-        start = 'paste0("',
-        finish = '")',
-      },
-      node = {
-        start = '.editor',
-        finish = '<C-d>',
-      },
-      julia = {
-        start = ';', -- Julia paste mode
-        finish = '',
-      },
-      default = {
-        start = '',
-        finish = '',
-      }
-    }
   },
 }
 
