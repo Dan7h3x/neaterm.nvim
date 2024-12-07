@@ -36,6 +36,7 @@ function Neaterm:setup_keymaps()
   if not self.opts.use_default_keymaps then
     return
   end
+
   local function safe_map(mode, lhs, rhs, opts)
     -- Check if mapping exists
     local existing = vim.fn.maparg(lhs, mode)
@@ -58,79 +59,50 @@ function Neaterm:setup_keymaps()
     {
       key = self.opts.keymaps.new_vertical,
       func = function() self:create_terminal({ type = 'vertical' }) end,
-      desc =
-      "Create vertical terminal",
+      desc = "Create vertical terminal",
       mode = { 'n' }
     },
     {
       key = self.opts.keymaps.new_horizontal,
       func = function() self:create_terminal({ type = 'horizontal' }) end,
-      desc =
-      "Create horizontal terminal",
+      desc = "Create horizontal terminal",
       mode = { 'n' }
     },
     {
       key = self.opts.keymaps.new_float,
       func = function() self:create_terminal({ type = 'float' }) end,
-      desc =
-      "Create floating terminal",
+      desc = "Create floating terminal",
       mode = { 'n' }
     },
-    { key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close current terminal", mode = { 'n', 't' }
-    },
+    { key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close current terminal", mode = { 'n', 't' } },
 
     -- Terminal navigation
-    { key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal", mode = { 'n', 't' }
-    },
-    { key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal", mode = { 'n', 't' }
-    },
+    { key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal", mode = { 'n', 't' } },
 
     -- Terminal movement
-    { key = self.opts.keymaps.move_up, func = function() self:move_terminal('up') end, desc = "Move terminal up", mode = { 'n', 't' }
-    },
-    { key = self.opts.keymaps.move_down, func = function() self:move_terminal('down') end, desc = "Move terminal down", mode = { 'n', 't' }
-    },
-    { key = self.opts.keymaps.move_left, func = function() self:move_terminal('left') end, desc = "Move terminal left", mode = { 'n', 't' }
-    },
-    { key = self.opts.keymaps.move_right, func = function() self:move_terminal('right') end, desc = "Move terminal right", mode = { 'n', 't' }
-    },
+    { key = self.opts.keymaps.move_up, func = function() self:move_terminal('up') end, desc = "Move terminal up", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_down, func = function() self:move_terminal('down') end, desc = "Move terminal down", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_left, func = function() self:move_terminal('left') end, desc = "Move terminal left", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_right, func = function() self:move_terminal('right') end, desc = "Move terminal right", mode = { 'n', 't' } },
 
     -- Terminal resizing
-    { key = self.opts.keymaps.resize_up, func = function() self:resize_terminal('up') end, desc = "Resize terminal up", mode = { 'n', 't' }
-    },
-    {
-      key = self.opts.keymaps.resize_down,
-      func = function() self:resize_terminal('down') end,
-      desc =
-      "Resize terminal down",
-      mode = { 'n', 't' }
-    },
-    {
-      key = self.opts.keymaps.resize_left,
-      func = function() self:resize_terminal('left') end,
-      desc =
-      "Resize terminal left",
-      mode = { 'n', 't' }
-    },
-    {
-      key = self.opts.keymaps.resize_right,
-      func = function() self:resize_terminal('right') end,
-      desc =
-      "Resize terminal right",
-      mode = { 'n', 't' }
-    },
+    { key = self.opts.keymaps.resize_up, func = function() self:resize_terminal('up') end, desc = "Resize terminal up", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_down, func = function() self:resize_terminal('down') end, desc = "Resize terminal down", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_left, func = function() self:resize_terminal('left') end, desc = "Resize terminal left", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_right, func = function() self:resize_terminal('right') end, desc = "Resize terminal right", mode = { 'n', 't' } },
 
     -- REPL operations
-    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,      desc = "Toggle REPL menu",    mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,   desc = "Send line to REPL",   mode = { 'n' } },
+    { key = self.opts.keymaps.repl_toggle, func = function() self:show_repl_menu() end, desc = "Toggle REPL menu", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_line, func = function() self:send_line_to_repl() end, desc = "Send line to REPL", mode = { 'n' } },
     { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end, desc = "Send buffer to REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,          desc = "Clear REPL",          mode = { 'n' } },
-    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,        desc = "Show REPL history",   mode = { 'n' } },
-    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,      desc = "Show REPL variables", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,        desc = "Restart REPL",        mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear, func = function() self:clear_repl() end, desc = "Clear REPL", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_history, func = function() self:show_history() end, desc = "Show REPL history", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_variables, func = function() self:show_variables() end, desc = "Show REPL variables", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_restart, func = function() self:restart_repl() end, desc = "Restart REPL", mode = { 'n' } },
 
     -- Bar operations
-    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,           desc = "Focus bar",           mode = { 'n' } },
+    { key = self.opts.keymaps.focus_bar, func = function() self:focus_bar() end, desc = "Focus bar", mode = { 'n' } },
   }
 
   -- Set normal mode mappings
@@ -1318,66 +1290,230 @@ end
 
 -- Add VSCode-like features
 function Neaterm:setup_vscode_features()
-  -- Terminal search
+  -- Ensure required dependencies
+  local has_fzf = pcall(require, 'fzf-lua')
+  if not has_fzf then
+    vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
+    return
+  end
+
+  -- Terminal search with improved buffer handling
   vim.keymap.set('t', '<C-f>', function()
     local buf = api.nvim_get_current_buf()
-    if self.terminals[buf] then
-      -- Create search UI
-      require('fzf-lua').live_grep({
-        prompt = "Search Terminal > ",
-        cwd = vim.fn.getcwd(),
-        search = "",
-        cmd = "grep -R --line-buffered --color=never -n '' " 
-          .. api.nvim_buf_get_name(buf)
-      })
+    if not buf or not self.terminals[buf] then return end
+
+    -- Ensure buffer is valid
+    if not api.nvim_buf_is_valid(buf) then
+      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
+      return
     end
+
+    -- Get buffer content for searching
+    local lines = api.nvim_buf_get_lines(buf, 0, -1, false)
+    if #lines == 0 then
+      vim.notify("Terminal buffer is empty", vim.log.levels.INFO)
+      return
+    end
+
+    -- Create temporary file for searching
+    local temp_file = vim.fn.tempname()
+    vim.fn.writefile(lines, temp_file)
+
+    require('fzf-lua').live_grep({
+      prompt = "Search Terminal > ",
+      cwd = vim.fn.getcwd(),
+      search = "",
+      cmd = string.format(
+        "grep -R --line-buffered --color=never -n '' %s",
+        vim.fn.shellescape(temp_file)
+      ),
+      actions = {
+        ["default"] = function(selected)
+          -- Clean up temp file
+          vim.fn.delete(temp_file)
+          if selected and selected[1] then
+            local line_num = tonumber(selected[1]:match("^(%d+)"))
+            if line_num then
+              -- Scroll to line
+              vim.schedule(function()
+                if api.nvim_buf_is_valid(buf) then
+                  api.nvim_buf_call(buf, function()
+                    vim.cmd('normal! ' .. line_num .. 'G')
+                  end)
+                end
+              end)
+            end
+          end
+        end,
+        ["ctrl-c"] = function()
+          vim.fn.delete(temp_file)
+        end
+      },
+      winopts = {
+        height = 0.4,
+        width = 0.6,
+        preview = {
+          hidden = 'hidden'
+        }
+      }
+    })
   end, { silent = true, desc = "Search in terminal" })
 
-  -- Terminal split
+  -- Terminal split with improved options
   vim.keymap.set('t', '<C-\\>', function()
     local current = api.nvim_get_current_buf()
-    if self.terminals[current] then
-      local term_opts = vim.deepcopy(self.terminals[current])
-      term_opts.type = 'vertical'
-      self:create_terminal(term_opts)
+    if not current or not self.terminals[current] then return end
+
+    -- Ensure current terminal is valid
+    if not api.nvim_buf_is_valid(current) then
+      vim.notify("Invalid terminal buffer", vim.log.levels.WARN)
+      return
     end
+
+    -- Get current terminal info
+    local current_term = self.terminals[current]
+    if not current_term then return end
+
+    -- Create new terminal with similar settings
+    local term_opts = {
+      cmd = current_term.cmd,
+      type = 'vertical',
+      env = current_term.env,
+      cwd = current_term.cwd,
+      -- Preserve window dimensions
+      float_width = current_term.float_width,
+      float_height = current_term.float_height
+    }
+
+    -- Create new terminal safely
+    vim.schedule(function()
+      local new_buf = self:create_terminal(term_opts)
+      if new_buf then
+        -- Sync some settings between terminals
+        if current_term.on_exit then
+          self.terminals[new_buf].on_exit = current_term.on_exit
+        end
+      end
+    end)
   end, { silent = true, desc = "Split terminal" })
 
-  -- Quick terminal selection
+  -- Quick terminal selection with improved UI
   vim.keymap.set('n', '<A-j>', function()
     local terms = vim.tbl_keys(self.terminals)
-    if #terms > 0 then
-      local items = {}
-      for _, buf in ipairs(terms) do
+    if #terms == 0 then
+      vim.notify("No active terminals", vim.log.levels.INFO)
+      return
+    end
+
+    local items = {}
+    for _, buf in ipairs(terms) do
+      -- Ensure buffer is valid
+      if api.nvim_buf_is_valid(buf) then
         local term = self.terminals[buf]
-        table.insert(items, {
-          name = string.format("%s (%s)", 
-            vim.fn.fnamemodify(term.cmd or "terminal", ":t"),
-            term.type
-          ),
-          buf = buf
-        })
+        if term then
+          local cmd_name = term.cmd and vim.fn.fnamemodify(term.cmd, ":t") or "terminal"
+          local status = api.nvim_buf_get_var(buf, "term_title") or ""
+          
+          table.insert(items, {
+            name = string.format("%s (%s) %s", 
+              cmd_name,
+              term.type,
+              status ~= "" and "- " .. status or ""
+            ),
+            buf = buf,
+            cmd = term.cmd,
+            type = term.type
+          })
+        end
       end
-      
-      require('fzf-lua').fzf_exec(
-        vim.tbl_map(function(item) return item.name end, items),
-        {
-          prompt = "Quick Terminal > ",
-          actions = {
-            ["default"] = function(selected)
-              local selection = selected[1]
-              for _, item in ipairs(items) do
-                if item.name == selection then
-                  self:show_terminal(item.buf)
-                  break
-                end
+    end
+
+    if #items == 0 then
+      vim.notify("No valid terminals found", vim.log.levels.INFO)
+      return
+    end
+
+    -- Sort items by most recently used
+    table.sort(items, function(a, b)
+      local a_time = api.nvim_buf_get_var(a.buf, "term_last_used") or 0
+      local b_time = api.nvim_buf_get_var(b.buf, "term_last_used") or 0
+      return a_time > b_time
+    end)
+
+    require('fzf-lua').fzf_exec(
+      vim.tbl_map(function(item) return item.name end, items),
+      {
+        prompt = "Quick Terminal > ",
+        actions = {
+          ["default"] = function(selected)
+            if not selected or #selected == 0 then return end
+            local selection = selected[1]
+            for _, item in ipairs(items) do
+              if item.name == selection then
+                -- Update last used time
+                pcall(api.nvim_buf_set_var, item.buf, "term_last_used", vim.fn.localtime())
+                -- Show terminal
+                self:show_terminal(item.buf)
+                break
               end
             end
+          end,
+          ["ctrl-x"] = function(selected)
+            if not selected or #selected == 0 then return end
+            local selection = selected[1]
+            for _, item in ipairs(items) do
+              if item.name == selection then
+                self:safe_close_terminal(item.buf)
+                break
+              end
+            end
+          end
+        },
+        winopts = {
+          height = 0.4,
+          width = 0.6,
+          preview = {
+            hidden = 'hidden'
           }
         }
-      )
-    end
+      }
+    )
   end, { silent = true, desc = "Quick terminal selection" })
+end
+
+function Neaterm:cleanup()
+  -- Save REPL history
+  if self.opts.repl.save_history then
+    pcall(function()
+      self:save_repl_history()
+    end)
+  end
+
+  -- Close all terminals gracefully
+  for buf, term in pairs(self.terminals) do
+    pcall(function()
+      if term.job_id then
+        vim.fn.jobstop(term.job_id)
+      end
+      if api.nvim_buf_is_valid(buf) then
+        api.nvim_buf_delete(buf, { force = true })
+      end
+    end)
+  end
+
+  -- Clean up UI elements
+  if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
+    pcall(api.nvim_win_close, self.bar_win, true)
+  end
+  if self.bar_buf and api.nvim_buf_is_valid(self.bar_buf) then
+    pcall(api.nvim_buf_delete, self.bar_buf, { force = true })
+  end
+
+  -- Clear internal state
+  self.terminals = {}
+  self.current_terminal = nil
+  self.current_repl = nil
+  self.history = {}
 end
 
 return Neaterm
