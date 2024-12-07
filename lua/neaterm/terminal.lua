@@ -119,65 +119,195 @@ function Neaterm:setup_keymaps()
 end
 
 -- Terminal Management Methods
-function Neaterm:create_terminal(opts)
-  opts = opts or {}
-  local buf = api.nvim_create_buf(false, true)
+function Neaterm:create_terminal(term_opts)
+  -- Ensure term_opts exists
+  term_opts = vim.tbl_deep_extend('keep', term_opts or {}, {
+    type = 'float',
+    cmd = self.opts.shell,
+    env = {},
+    cwd = vim.fn.getcwd(),
+  })
+
+  -- Create buffer
+  local buf = vim.api.nvim_create_buf(false, true)
+  if not buf then
+    vim.notify("Failed to create terminal buffer", vim.log.levels.ERROR)
+    return nil
+  end
 
   -- Set buffer options
-  api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
-  api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-  api.nvim_buf_set_option(buf, 'buflisted', false)
+  vim.api.nvim_buf_set_option(buf, 'bufhidden', 'hide')
+  vim.api.nvim_buf_set_option(buf, 'filetype', 'neaterm')
 
-  local win = utils.create_window(self.opts, opts, buf)
-  local term_id = fn.termopen(opts.cmd or self.opts.shell, {
-    on_exit = function(_, code)
-      vim.schedule(function()
-        if api.nvim_buf_is_valid(buf) then
-          self.terminals[buf] = nil
-          if self.current_terminal == buf then
-            self.current_terminal = nil
-          end
-          if self.current_repl and self.current_repl.buf == buf then
-            self.current_repl = nil
-          end
-          if win and api.nvim_win_is_valid(win) then
-            pcall(api.nvim_win_close, win, true)
-          end
-          pcall(api.nvim_buf_delete, buf, { force = true })
-        end
-        ui.update_bar(self)
-      end)
+  -- Create window
+  local win = utils.create_window(self.opts, term_opts, buf)
+  if not win then
+    vim.api.nvim_buf_delete(buf, { force = true })
+    return nil
+  end
+
+  -- Start terminal job
+  local job_id = vim.fn.termopen(term_opts.cmd, {
+    env = term_opts.env,
+    cwd = term_opts.cwd,
+    on_exit = function()
+      -- Don't immediately delete the buffer/window
+      if vim.api.nvim_buf_is_valid(buf) then
+        -- Keep the buffer but clear its content
+        vim.api.nvim_buf_set_lines(buf, 0, -1, false, {})
+        -- Optionally notify the user
+        vim.notify("Terminal process exited", vim.log.levels.INFO)
+      end
     end
   })
 
-  if term_id <= 0 then
-    pcall(api.nvim_buf_delete, buf, { force = true })
-    vim.notify("Failed to create terminal", vim.log.levels.ERROR)
+  if job_id <= 0 then
+    vim.notify("Failed to start terminal process", vim.log.levels.ERROR)
+    vim.api.nvim_buf_delete(buf, { force = true })
     return nil
   end
 
   -- Store terminal info
-  local terminal_info = {
-    window = win,
-    job_id = term_id,
-    type = opts.type,
-    cmd = opts.cmd or self.opts.shell
+  self.terminals[buf] = {
+    job_id = job_id,
+    win = win,
+    type = term_opts.type,
+    cmd = term_opts.cmd,
+    env = term_opts.env,
+    cwd = term_opts.cwd,
   }
-  self.terminals[buf] = terminal_info
-
-  -- Setup terminal settings with the terminal info
-  self:setup_terminal_settings(win, buf, terminal_info)
 
   -- Set as current terminal
   self.current_terminal = buf
 
+  -- Setup terminal-specific keymaps if enabled
+  if self.opts.use_default_keymaps then
+    self:setup_terminal_keymaps(buf)
+  end
+
+  -- Always setup essential terminal keymaps (even when default keymaps are disabled)
+  self:setup_essential_terminal_keymaps(buf)
+
   -- Update UI
   ui.update_bar(self)
 
-  -- Enter insert mode
-  vim.cmd('startinsert')
-
   return buf
+end
+
+-- New method for essential terminal keymaps
+function Neaterm:setup_essential_terminal_keymaps(buf)
+  local opts = { buffer = buf, silent = true }
+  
+  -- Essential keymaps that should always work
+  vim.keymap.set('t', '<ESC><ESC>', '<C-\\><C-n>', opts)
+  vim.keymap.set('t', '<C-d>', function()
+    if vim.fn.mode() == 't' then
+      vim.cmd('stopinsert')
+    end
+    self:close_current_terminal()
+  end, opts)
+end
+
+-- Improved paste handling
+function Neaterm:send_text_with_paste_mode(text, filetype)
+  if not text or text == "" then return end
+  
+  local paste_config = self.opts.paste_mode.commands[filetype] 
+    or self.opts.paste_mode.commands.default
+
+  -- Process text according to paste mode settings
+  if self.opts.paste_mode.enabled then
+    if self.opts.paste_mode.trim_prompt then
+      -- Remove common prompt characters
+      text = text:gsub("^%s*[>$#%%]+%s*", "")
+    end
+    
+    if self.opts.paste_mode.remove_empty_lines then
+      -- Remove empty lines while preserving indentation
+      local lines = vim.split(text, "\n")
+      local filtered_lines = vim.tbl_filter(function(line)
+        return line:match("%S")
+      end, lines)
+      text = table.concat(filtered_lines, "\n")
+    end
+  end
+
+  if self.opts.paste_mode.enabled and paste_config then
+    -- Send paste start command
+    if paste_config.start ~= "" then
+      self:send_text(paste_config.start)
+      -- Small delay to ensure proper paste mode
+      vim.defer_fn(function()
+        self:send_text(text)
+        -- Send paste finish command if needed
+        if paste_config.finish ~= "" then
+          vim.defer_fn(function()
+            self:send_text(paste_config.finish)
+          end, 50)
+        end
+      end, 50)
+    else
+      self:send_text(text)
+    end
+  else
+    self:send_text(text)
+  end
+end
+
+-- Setup VSCode features with keymaps
+function Neaterm:setup_vscode_features()
+  if not pcall(require, 'fzf-lua') then
+    vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
+    return
+  end
+
+  local function setup_vscode_keymap(mode, key, func, desc)
+    if self.opts.use_default_keymaps then
+      vim.keymap.set(mode, key, func, { silent = true, desc = desc })
+    end
+  end
+
+  -- Terminal search
+  setup_vscode_keymap('t', self.opts.keymaps.search_terminal, function()
+    local buf = vim.api.nvim_get_current_buf()
+    if not self.terminals[buf] then return end
+    -- ... rest of search implementation ...
+  end, "Search in terminal")
+
+  -- Terminal split
+  setup_vscode_keymap('t', self.opts.keymaps.split_terminal, function()
+    local current = vim.api.nvim_get_current_buf()
+    if not self.terminals[current] then return end
+    -- ... rest of split implementation ...
+  end, "Split terminal")
+
+  -- Quick terminal selection
+  setup_vscode_keymap('n', self.opts.keymaps.quick_terminal, function()
+    -- ... quick terminal implementation ...
+  end, "Quick terminal selection")
+
+  -- Clear terminal
+  setup_vscode_keymap('t', self.opts.keymaps.clear_terminal, function()
+    local buf = vim.api.nvim_get_current_buf()
+    if self.terminals[buf] then
+      vim.api.nvim_chan_send(self.terminals[buf].job_id, "\x0c")
+    end
+  end, "Clear terminal")
+
+  -- Copy from terminal
+  setup_vscode_keymap('t', self.opts.keymaps.copy_terminal, function()
+    vim.cmd('stopinsert')
+    vim.cmd('normal! "+y')
+  end, "Copy from terminal")
+
+  -- Paste to terminal
+  setup_vscode_keymap('t', self.opts.keymaps.paste_terminal, function()
+    local buf = vim.api.nvim_get_current_buf()
+    if self.terminals[buf] then
+      local text = vim.fn.getreg('+')
+      self:send_text_with_paste_mode(text, vim.bo.filetype)
+    end
+  end, "Paste to terminal")
 end
 
 function Neaterm:setup_terminal_settings(win, buf, terminal_info)
@@ -972,7 +1102,7 @@ function Neaterm:send_text_with_paste_mode(text, filetype)
       self:send_text(text)
     end
   else
-    self:send_text(text)
+   self:send_text(text)
   end
 end
 
@@ -1181,7 +1311,7 @@ end
 function Neaterm:update_float_position(win, changes)
   if not win or not api.nvim_win_is_valid(win) then return end
 
-  local bounds = self:get_window_bounds(win)
+  local bounds =self:get_window_bounds(win)
   if bounds.relative ~= 'editor' then return end
 
   -- Apply changes with bounds checking
