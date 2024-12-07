@@ -188,22 +188,6 @@ function Neaterm:setup_terminal_settings(win, buf, terminal_info)
       cmd = '<C-\\><C-n>',
       desc = 'Terminal: Exit insert mode'
     },
-    ['<C-h>'] = {
-      cmd = '<C-\\><C-n><C-w>h',
-      desc = 'Terminal: Focus left window'
-    },
-    ['<C-j>'] = {
-      cmd = '<C-\\><C-n><C-w>j',
-      desc = 'Terminal: Focus down window'
-    },
-    ['<C-k>'] = {
-      cmd = '<C-\\><C-n><C-w>k',
-      desc = 'Terminal: Focus up window'
-    },
-    ['<C-l>'] = {
-      cmd = '<C-\\><C-n><C-w>l',
-      desc = 'Terminal: Focus right window'
-    },
     ['<C-w>'] = {
       cmd = '<C-\\><C-n><C-w>',
       desc = 'Terminal: Window command prefix'
@@ -249,12 +233,18 @@ function Neaterm:show_repl_menu()
   local current_ft = vim.bo.filetype
   local items = self:get_repl_menu_items(current_ft)
 
+  if #items == 0 then
+    vim.notify("No REPLs configured for current filetype", vim.log.levels.WARN)
+    return
+  end
+
   require('fzf-lua').fzf_exec(
     vim.tbl_map(function(item) return item.name end, items),
     {
       prompt = "Select REPL > ",
       actions = {
         ["default"] = function(selected)
+          if not selected or #selected == 0 then return end
           local selection = selected[1]
           for _, item in ipairs(items) do
             if item.name == selection then
@@ -269,6 +259,12 @@ function Neaterm:show_repl_menu()
 end
 
 function Neaterm:start_repl(repl_config)
+  -- Validate config
+  if not repl_config or not repl_config.cmd then
+    vim.notify("Invalid REPL configuration", vim.log.levels.ERROR)
+    return
+  end
+
   -- Close existing REPL if any
   if self.current_repl then
     self:safe_close_repl()
@@ -281,11 +277,12 @@ function Neaterm:start_repl(repl_config)
   end
 end
 
--- Helper method to create new REPL
 function Neaterm:_create_new_repl(repl_config)
   local buf = self:create_terminal({
     cmd = repl_config.cmd,
-    type = repl_config.type,
+    type = repl_config.type or 'vertical',
+    cwd = repl_config.cwd,
+    env = repl_config.env
   })
 
   if not buf then
@@ -301,7 +298,7 @@ function Neaterm:_create_new_repl(repl_config)
   }
 
   -- Execute startup commands after a delay
-  if self.current_repl.config.startup_cmds then
+  if self.current_repl.config and self.current_repl.config.startup_cmds then
     vim.defer_fn(function()
       if self.current_repl and self.terminals[buf] then
         for _, cmd in ipairs(self.current_repl.config.startup_cmds) do
@@ -310,6 +307,10 @@ function Neaterm:_create_new_repl(repl_config)
       end
     end, 500)
   end
+
+  -- Set buffer local options
+  vim.api.nvim_buf_set_var(buf, "is_repl", true)
+  vim.api.nvim_buf_set_var(buf, "repl_filetype", repl_config.filetype)
 end
 
 -- History Management Methods
@@ -358,7 +359,7 @@ function Neaterm:send_text(text)
   end
 
   -- Safely send text to terminal
-  local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
+  local success, err = pcall(vim.api.nvim_chan_send, term.job_id, formatted_text)
   if not success then
     vim.notify("Failed to send text: " .. err, vim.log.levels.ERROR)
   end
@@ -370,9 +371,25 @@ function Neaterm:send_line_to_repl()
     return
   end
 
-  local line = api.nvim_get_current_line()
-  self:add_to_history(line, self.current_repl.filetype)
-  self:send_text(line)
+  local line = vim.api.nvim_get_current_line()
+  if line ~= "" then
+    self:add_to_history(line, self.current_repl.filetype)
+    self:send_text_with_paste_mode(line, self.current_repl.filetype)
+  end
+end
+
+function Neaterm:send_buffer_to_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+  if text ~= "" then
+    self:add_to_history(text, self.current_repl.filetype)
+    self:send_text_with_paste_mode(text, self.current_repl.filetype)
+  end
 end
 
 -- REPL Configuration Methods
@@ -713,41 +730,31 @@ function Neaterm:safe_close_repl()
   if not self.current_repl then return end
 
   local repl = self.current_repl
-  local config = self.repl_configs[repl.filetype]
+  -- Send exit command based on filetype
+  local exit_cmds = {
+    python = "exit()",
+    r = "q()",
+    julia = "exit()",
+    lua = "os.exit()",
+    node = ".exit",
+  }
 
-  -- Only try to send exit command if terminal is still valid
-  if config and config.exit_cmd and self.terminals[repl.buf] then
-    local term = self.terminals[repl.buf]
-    if term and term.job_id then
-      local valid_job = vim.fn.jobwait({ term.job_id }, 0)[1] == -1
-      if valid_job then
-        self:send_text(config.exit_cmd)
-      end
+  if repl.buf and vim.api.nvim_buf_is_valid(repl.buf) then
+    -- Send exit command if available
+    if exit_cmds[repl.filetype] then
+      self:send_text(exit_cmds[repl.filetype])
     end
-  end
-
-  -- Wait briefly before cleanup
-  vim.defer_fn(function()
-    if repl.buf and api.nvim_buf_is_valid(repl.buf) then
-      -- Close window if it exists
-      if self.terminals[repl.buf] and self.terminals[repl.buf].window then
-        local win = self.terminals[repl.buf].window
-        if api.nvim_win_is_valid(win) then
-          api.nvim_win_close(win, true)
-        end
+    
+    -- Wait briefly before cleanup
+    vim.defer_fn(function()
+      if vim.api.nvim_buf_is_valid(repl.buf) then
+        pcall(vim.api.nvim_buf_delete, repl.buf, { force = true })
       end
-
-      -- Delete buffer directly without modification
-      pcall(api.nvim_buf_delete, repl.buf, { force = true })
-
-      -- Clean up terminal entry
-      self.terminals[repl.buf] = nil
-    end
-
-    -- Clear current REPL
+      self.current_repl = nil
+    end, 100)
+  else
     self.current_repl = nil
-    ui.update_bar(self)
-  end, 100)
+  end
 end
 
 -- Add this method to the Neaterm class
@@ -1321,33 +1328,29 @@ end
 -- end
 
 -- Add to history with proper checks
-function Neaterm:add_to_history(text, filetype)
-  if not text or text == "" or not filetype then return end
-
+function Neaterm:add_to_history(cmd, filetype)
   if not self.history[filetype] then
     self.history[filetype] = {}
   end
-
+  
   -- Remove duplicate if exists
   for i, item in ipairs(self.history[filetype]) do
-    if item == text then
+    if item == cmd then
       table.remove(self.history[filetype], i)
       break
     end
   end
-
+  
   -- Add to start of history
-  table.insert(self.history[filetype], 1, text)
-
+  table.insert(self.history[filetype], 1, cmd)
+  
   -- Limit history size
-  while #self.history[filetype] > (self.opts.repl.max_history or 100) do
+  while #self.history[filetype] > 100 do
     table.remove(self.history[filetype])
   end
-
-  -- Save history if enabled
-  if self.opts.repl.save_history then
-    self:save_repl_history()
-  end
+  
+  -- Save history
+  self:save_repl_history()
 end
 
 -- Clear REPL
