@@ -48,14 +48,14 @@ function Neaterm:setup_keymaps()
       ), vim.log.levels.WARN)
       return
     end
-    
+
     vim.keymap.set(mode, lhs, rhs, opts)
   end
   local opts = { noremap = true, silent = true }
-  
+
   local maps = {
     -- Basic terminal operations
-    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,     desc = "Toggle terminal",     mode = { 'n', 't' } },
+    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,        desc = "Toggle terminal",        mode = { 'n', 't' } },
     {
       key = self.opts.keymaps.new_vertical,
       func = function() self:create_terminal({ type = 'vertical' }) end,
@@ -74,35 +74,35 @@ function Neaterm:setup_keymaps()
       desc = "Create floating terminal",
       mode = { 'n' }
     },
-    { key = self.opts.keymaps.close, func = function() self:close_current_terminal() end, desc = "Close current terminal", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.close,            func = function() self:close_current_terminal() end, desc = "Close current terminal", mode = { 'n', 't' } },
 
     -- Terminal navigation
-    { key = self.opts.keymaps.next, func = function() self:next_terminal() end, desc = "Next terminal", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.prev, func = function() self:prev_terminal() end, desc = "Previous terminal", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.next,             func = function() self:next_terminal() end,          desc = "Next terminal",          mode = { 'n', 't' } },
+    { key = self.opts.keymaps.prev,             func = function() self:prev_terminal() end,          desc = "Previous terminal",      mode = { 'n', 't' } },
 
     -- Terminal movement
-    { key = self.opts.keymaps.move_up, func = function() self:move_terminal('up') end, desc = "Move terminal up", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.move_down, func = function() self:move_terminal('down') end, desc = "Move terminal down", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.move_left, func = function() self:move_terminal('left') end, desc = "Move terminal left", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.move_right, func = function() self:move_terminal('right') end, desc = "Move terminal right", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_up,          func = function() self:move_terminal('up') end,      desc = "Move terminal up",       mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_down,        func = function() self:move_terminal('down') end,    desc = "Move terminal down",     mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_left,        func = function() self:move_terminal('left') end,    desc = "Move terminal left",     mode = { 'n', 't' } },
+    { key = self.opts.keymaps.move_right,       func = function() self:move_terminal('right') end,   desc = "Move terminal right",    mode = { 'n', 't' } },
 
     -- Terminal resizing
-    { key = self.opts.keymaps.resize_up, func = function() self:resize_terminal('up') end, desc = "Resize terminal up", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.resize_down, func = function() self:resize_terminal('down') end, desc = "Resize terminal down", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.resize_left, func = function() self:resize_terminal('left') end, desc = "Resize terminal left", mode = { 'n', 't' } },
-    { key = self.opts.keymaps.resize_right, func = function() self:resize_terminal('right') end, desc = "Resize terminal right", mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_up,        func = function() self:resize_terminal('up') end,    desc = "Resize terminal up",     mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_down,      func = function() self:resize_terminal('down') end,  desc = "Resize terminal down",   mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_left,      func = function() self:resize_terminal('left') end,  desc = "Resize terminal left",   mode = { 'n', 't' } },
+    { key = self.opts.keymaps.resize_right,     func = function() self:resize_terminal('right') end, desc = "Resize terminal right",  mode = { 'n', 't' } },
 
     -- REPL operations
-    { key = self.opts.keymaps.repl_toggle, func = function() self:show_repl_menu() end, desc = "Toggle REPL menu", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_line, func = function() self:send_line_to_repl() end, desc = "Send line to REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end, desc = "Send buffer to REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_clear, func = function() self:clear_repl() end, desc = "Clear REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_history, func = function() self:show_history() end, desc = "Show REPL history", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_variables, func = function() self:show_variables() end, desc = "Show REPL variables", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_restart, func = function() self:restart_repl() end, desc = "Restart REPL", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,         desc = "Toggle REPL menu",       mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,      desc = "Send line to REPL",      mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end,    desc = "Send buffer to REPL",    mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,             desc = "Clear REPL",             mode = { 'n' } },
+    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,           desc = "Show REPL history",      mode = { 'n' } },
+    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,         desc = "Show REPL variables",    mode = { 'n' } },
+    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,           desc = "Restart REPL",           mode = { 'n' } },
 
     -- Bar operations
-    { key = self.opts.keymaps.focus_bar, func = function() self:focus_bar() end, desc = "Focus bar", mode = { 'n' } },
+    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,              desc = "Focus bar",              mode = { 'n' } },
   }
 
   -- Set normal mode mappings
@@ -752,7 +752,7 @@ end
 
 -- Add this method to the Neaterm class
 function Neaterm:setup_vscode_features()
- -- Ensurerequired dependencies
+  -- Ensurerequired dependencies
   local has_fzf = pcall(require, 'fzf-lua')
   if not has_fzf then
     vim.notify("fzf-lua is required for VSCode features", vim.log.levels.WARN)
@@ -778,7 +778,7 @@ function Neaterm:setup_vscode_features()
     end
 
     -- Create temporary file for searching
-    local temp_file =vim.fn.tempname()
+    local temp_file = vim.fn.tempname()
     vim.fn.writefile(lines, temp_file)
 
     require('fzf-lua').live_grep({
@@ -875,9 +875,9 @@ function Neaterm:setup_vscode_features()
         if term then
           local cmd_name = term.cmd and vim.fn.fnamemodify(term.cmd, ":t") or "terminal"
           local status = api.nvim_buf_get_var(buf, "term_title") or ""
-          
+
           table.insert(items, {
-            name = string.format("%s (%s) %s", 
+            name = string.format("%s (%s) %s",
               cmd_name,
               term.type,
               status ~= "" and "- " .. status or ""
@@ -945,9 +945,9 @@ end
 
 function Neaterm:send_text_with_paste_mode(text, filetype)
   if not text or text == "" then return end
-  
-  local paste_config = self.opts.paste_mode.commands[filetype] 
-    or self.opts.paste_mode.commands.default
+
+  local paste_config = self.opts.paste_mode.commands[filetype]
+      or self.opts.paste_mode.commands.default
 
   if self.opts.paste_mode.enabled and paste_config then
     -- Send paste start command
