@@ -47,7 +47,7 @@ function M.create_bar(neaterm)
   if not ok then
     vim.notify("Failed to create bar window: " .. win, vim.log.levels.ERROR)
     return
-  }
+  end
   neaterm.bar_win = win
 
   -- Set window highlights
