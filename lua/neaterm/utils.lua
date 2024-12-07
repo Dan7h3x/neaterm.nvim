@@ -3,28 +3,55 @@ local api = vim.api
 local M = {}
 
 function M.create_window(opts, term_opts, buf)
+  if not api.nvim_buf_is_valid(buf) then
+    vim.notify("Invalid buffer for window creation", vim.log.levels.ERROR)
+    return nil
+  end
+
   local win_opts = {
     style = 'minimal',
     border = opts.border
   }
 
-  if term_opts.type == 'float' then
+  local function create_float_window()
     win_opts.relative = 'editor'
     win_opts.width = math.floor(vim.o.columns * (term_opts.float_width or opts.float_width))
     win_opts.height = math.floor(vim.o.lines * (term_opts.float_height or opts.float_height))
-    win_opts.row = vim.o.lines - win_opts.height - 4
+    win_opts.row = math.floor((vim.o.lines - win_opts.height) / 2)
     win_opts.col = math.floor((vim.o.columns - win_opts.width) / 2)
-    return api.nvim_open_win(buf, true, win_opts)
-  elseif term_opts.type == 'full' then
-    vim.cmd('enew')
+    
+    local ok, win = pcall(api.nvim_open_win, buf, true, win_opts)
+    if not ok then
+      vim.notify("Failed to create float window: " .. win, vim.log.levels.ERROR)
+      return nil
+    end
+    return win
+  end
+
+  local function create_split_window(split_cmd)
+    local ok, _ = pcall(vim.cmd, split_cmd)
+    if not ok then
+      vim.notify("Failed to create split window", vim.log.levels.ERROR)
+      return nil
+    end
     local win = api.nvim_get_current_win()
-    api.nvim_win_set_buf(win, buf)
+    pcall(api.nvim_win_set_buf, win, buf)
+    return win
+  end
+
+  if term_opts.type == 'float' then
+    return create_float_window()
+  elseif term_opts.type == 'full' then
+    local ok, _ = pcall(vim.cmd, 'enew')
+    if not ok then
+      vim.notify("Failed to create full window", vim.log.levels.ERROR)
+      return nil
+    end
+    local win = api.nvim_get_current_win()
+    pcall(api.nvim_win_set_buf, win, buf)
     return win
   else
-    vim.cmd(term_opts.type == 'vertical' and 'vsplit' or 'split')
-    local win = api.nvim_get_current_win()
-    api.nvim_win_set_buf(win, buf)
-    return win
+    return create_split_window(term_opts.type == 'vertical' and 'vsplit' or 'split')
   end
 end
 
