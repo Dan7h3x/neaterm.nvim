@@ -867,37 +867,61 @@ function Neaterm:cleanup_terminal(buf)
 
   ui.update_bar(self)
 end
-
 function Neaterm:safe_close_repl()
   if not self.current_repl then return end
 
   local repl = self.current_repl
-  -- Send exit command based on filetype
+  local buf = repl.buf
+  
+  -- Exit commands for different REPLs
   local exit_cmds = {
     python = "exit()",
+    ipython = "exit()",
     r = "q()",
     julia = "exit()",
     lua = "os.exit()",
     node = ".exit",
+    default = "exit"
   }
 
-  if repl.buf and vim.api.nvim_buf_is_valid(repl.buf) then
-    -- Send exit command if available
-    if exit_cmds[repl.filetype] then
-      self:send_text(exit_cmds[repl.filetype])
-    end
-    
-    -- Wait briefly before cleanup
-    vim.defer_fn(function()
-      if vim.api.nvim_buf_is_valid(repl.buf) then
-        pcall(vim.api.nvim_buf_delete, repl.buf, { force = true })
-      end
-      self.current_repl = nil
-    end, 100)
-  else
-    self.current_repl = nil
+  -- Try to send exit command
+  if repl.filetype then
+    local exit_cmd = exit_cmds[repl.filetype] or exit_cmds.default
+    pcall(function()
+      self:send_text(exit_cmd)
+    end)
   end
+
+  -- Wait briefly before cleanup
+  vim.defer_fn(function()
+    -- Close window if it exists
+    if self.terminals[buf] and self.terminals[buf].win then
+      if api.nvim_win_is_valid(self.terminals[buf].win) then
+        pcall(api.nvim_win_close, self.terminals[buf].win, true)
+      end
+    end
+
+    -- Delete buffer
+    if api.nvim_buf_is_valid(buf) then
+      pcall(api.nvim_buf_delete, buf, { force = true })
+    end
+
+    -- Clean up terminal entry
+    self.terminals[buf] = nil
+
+    -- Reset REPL state
+    self.current_repl = nil
+
+    -- Update current terminal if needed
+    if self.current_terminal == buf then
+      self.current_terminal = next(self.terminals)
+    end
+
+    -- Update UI
+    ui.update_bar(self)
+  end, 150)
 end
+
 
 -- Add this method to the Neaterm class
 function Neaterm:setup_vscode_features()
@@ -1198,14 +1222,15 @@ function Neaterm:toggle_terminal()
   end
 end
 
--- Close current terminal
+-- Close current terminal with safety checks
 function Neaterm:close_current_terminal()
   if self.current_terminal then
-    local term = self.terminals[self.current_terminal]
-    if term and term.window and api.nvim_win_is_valid(term.window) then
-      api.nvim_win_close(term.window, true)
+    -- Check if it's a REPL
+    if self.current_repl and self.current_repl.buf == self.current_terminal then
+      self:safe_close_repl()
+    else
+      self:safe_close_terminal(self.current_terminal)
     end
-    self:cleanup_terminal(self.current_terminal)
   end
 end
 
@@ -1298,14 +1323,33 @@ function Neaterm:safe_close_terminal(buf)
   if not buf or not self.terminals[buf] then return end
 
   local term = self.terminals[buf]
+  
+  -- Try to terminate the job gracefully
   if term.job_id then
-    -- Try to terminate the job gracefully
     pcall(vim.fn.jobstop, term.job_id)
   end
 
+  -- Close window if it exists
+  if term.win and api.nvim_win_is_valid(term.win) then
+    pcall(api.nvim_win_close, term.win, true)
+  end
+
+  -- Schedule buffer deletion to allow for cleanup
   vim.defer_fn(function()
-    self:cleanup_terminal(buf)
-  end, 50)
+    if api.nvim_buf_is_valid(buf) then
+      pcall(api.nvim_buf_delete, buf, { force = true })
+    end
+    -- Remove from terminals table
+    self.terminals[buf] = nil
+    
+    -- Update current terminal if needed
+    if self.current_terminal == buf then
+      self.current_terminal = next(self.terminals)
+    end
+    
+    -- Update UI
+    ui.update_bar(self)
+  end, 100)
 end
 
 -- Add these helper functions for floating window management
