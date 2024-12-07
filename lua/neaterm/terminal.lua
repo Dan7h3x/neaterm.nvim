@@ -943,7 +943,6 @@ function Neaterm:setup_vscode_features()
   end, { silent = true, desc = "Quick terminal selection" })
 end
 
-return Neaterm
 
 -- Add VSCode-like features
 function Neaterm:setup_vscode_features()
