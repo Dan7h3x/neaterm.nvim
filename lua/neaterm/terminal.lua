@@ -1017,4 +1017,367 @@ function Neaterm:cleanup()
   self.history = {}
 end
 
+-- Focus terminal bar
+function Neaterm:focus_bar()
+  if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
+    api.nvim_set_current_win(self.bar_win)
+  end
+end
+
+-- Toggle terminal
+function Neaterm:toggle_terminal()
+  if not self.current_terminal or not api.nvim_buf_is_valid(self.current_terminal) then
+    self:create_terminal({ type = self.opts.default_type or 'float' })
+    return
+  end
+
+  local term = self.terminals[self.current_terminal]
+  if not term then
+    self:create_terminal({ type = self.opts.default_type or 'float' })
+    return
+  end
+
+  local win = term.window
+  if not win or not api.nvim_win_is_valid(win) then
+    -- Window was closed, create new one
+    local new_win = utils.create_window(self.opts, { type = term.type }, self.current_terminal)
+    term.window = new_win
+    vim.cmd('startinsert')
+  else
+    -- Window exists, hide it
+    api.nvim_win_hide(win)
+  end
+end
+
+-- Close current terminal
+function Neaterm:close_current_terminal()
+  if self.current_terminal then
+    local term = self.terminals[self.current_terminal]
+    if term and term.window and api.nvim_win_is_valid(term.window) then
+      api.nvim_win_close(term.window, true)
+    end
+    self:cleanup_terminal(self.current_terminal)
+  end
+end
+
+-- Show terminal
+function Neaterm:show_terminal(buf)
+  if not buf or not self.terminals[buf] then return end
+
+  local term = self.terminals[buf]
+  if not api.nvim_win_is_valid(term.window) then
+    -- Recreate window if invalid
+    term.window = utils.create_window(self.opts, { type = term.type }, buf)
+  end
+
+  api.nvim_set_current_win(term.window)
+  self.current_terminal = buf
+  ui.update_bar(self)
+end
+
+function Neaterm:parse_repl_output(output, filetype)
+  local config = self.repl_configs[filetype]
+  if not config then return {} end
+
+  local parsers = {
+    python = function(out)
+      local vars = {}
+      for line in out:gmatch("[^\r\n]+") do
+        -- Match IPython's whos output format
+        local var_type, name, size, info = line:match("(%w+)%s+(%w+)%s+(%d+)%s*(.*)")
+        if name then
+          vars[#vars + 1] = {
+            name = name,
+            type = var_type,
+            size = size,
+            info = info:gsub("^%s*(.-)%s*$", "%1"), -- trim
+            display = string.format("%-20s │ %-10s │ %s", name, var_type, size)
+          }
+        end
+      end
+      return vars
+    end,
+
+    r = function(out)
+      local vars = {}
+      -- Parse ls() output and get more info using str()
+      for name in out:gmatch("[%w_.]+") do
+        -- Use str() to get type information
+        local str_cmd = string.format("str(%s)", name)
+        self:send_text(str_cmd)
+        -- TODO: Implement proper output capture for R
+        vars[#vars + 1] = {
+          name = name,
+          type = "object", -- This should be parsed from str() output
+          display = string.format("%-20s │ %-10s", name, "object")
+        }
+      end
+      return vars
+    end,
+
+    julia = function(out)
+      local vars = {}
+      for line in out:gmatch("[^\r\n]+") do
+        local name = line:match("^([%w_]+)")
+        if name then
+          -- Get type information using typeof()
+          local type_cmd = string.format("typeof(%s)", name)
+          self:send_text(type_cmd)
+          -- TODO: Implement proper output capture for Julia
+          vars[#vars + 1] = {
+            name = name,
+            type = "variable",
+            display = string.format("%-20s │ %-10s", name, "variable")
+          }
+        end
+      end
+      return vars
+    end
+  }
+
+  -- Use custom parser if defined in config
+  if config.parse_output then
+    return config.parse_output(output)
+  end
+
+  -- Use default parser for the language if available
+  return (parsers[filetype] or function() return {} end)(output)
+end
+
+-- Add this helper function to safely close windows and buffers
+function Neaterm:safe_close_terminal(buf)
+  if not buf or not self.terminals[buf] then return end
+
+  local term = self.terminals[buf]
+  if term.job_id then
+    -- Try to terminate the job gracefully
+    pcall(vim.fn.jobstop, term.job_id)
+  end
+
+  vim.defer_fn(function()
+    self:cleanup_terminal(buf)
+  end, 50)
+end
+
+-- Add these helper functions for floating window management
+function Neaterm:get_window_bounds(win)
+  local config = api.nvim_win_get_config(win)
+  return {
+    row = type(config.row) == "table" and config.row[false] or config.row,
+    col = type(config.col) == "table" and config.col[false] or config.col,
+    width = config.width,
+    height = config.height,
+    relative = config.relative
+  }
+end
+
+function Neaterm:update_float_position(win, changes)
+  if not win or not api.nvim_win_is_valid(win) then return end
+
+  local bounds = self:get_window_bounds(win)
+  if bounds.relative ~= 'editor' then return end
+
+  -- Apply changes with bounds checking
+  local new_config = {
+    relative = 'editor',
+    width = bounds.width,
+    height = bounds.height,
+    row = bounds.row,
+    col = bounds.col,
+  }
+
+  if changes.row then
+    new_config.row = math.max(0, math.min(bounds.row + changes.row, vim.o.lines - bounds.height - 2))
+  end
+  if changes.col then
+    new_config.col = math.max(0, math.min(bounds.col + changes.col, vim.o.columns - bounds.width - 2))
+  end
+  if changes.width then
+    new_config.width = math.max(20, math.min(bounds.width + changes.width, vim.o.columns - bounds.col - 2))
+  end
+  if changes.height then
+    new_config.height = math.max(3, math.min(bounds.height + changes.height, vim.o.lines - bounds.row - 2))
+  end
+
+  api.nvim_win_set_config(win, new_config)
+end
+
+-- Add navigation methods
+function Neaterm:next_terminal()
+  local terminals = vim.tbl_keys(self.terminals)
+  if #terminals == 0 then return end
+
+  local current_index = 1
+  for i, buf in ipairs(terminals) do
+    if buf == self.current_terminal then
+      current_index = i
+      break
+    end
+  end
+
+  local next_index = current_index % #terminals + 1
+  self:show_terminal(terminals[next_index])
+end
+
+function Neaterm:prev_terminal()
+  local terminals = vim.tbl_keys(self.terminals)
+  if #terminals == 0 then return end
+
+  local current_index = 1
+  for i, buf in ipairs(terminals) do
+    if buf == self.current_terminal then
+      current_index = i
+      break
+    end
+  end
+
+  local prev_index = (current_index - 2) % #terminals + 1
+  self:show_terminal(terminals[prev_index])
+end
+
+-- Add movement and resize methods
+function Neaterm:move_terminal(direction)
+  local term = self.terminals[self.current_terminal]
+  if not term or not term.window then return end
+
+  local win = term.window
+  local config = api.nvim_win_get_config(win)
+
+  if config.relative == 'editor' then -- Floating window
+    local changes = {
+      up = { row = -self.opts.move_amount },
+      down = { row = self.opts.move_amount },
+      left = { col = -self.opts.move_amount },
+      right = { col = self.opts.move_amount }
+    }
+
+    self:update_float_position(win, changes[direction] or {})
+  else -- Regular window
+    local directions = {
+      up = 'K',
+      down = 'J',
+      left = 'H',
+      right = 'L'
+    }
+    vim.cmd('wincmd ' .. directions[direction])
+  end
+end
+
+function Neaterm:resize_terminal(direction)
+  local term = self.terminals[self.current_terminal]
+  if not term or not term.window then return end
+
+  local win = term.window
+  local config = api.nvim_win_get_config(win)
+
+  if config.relative == 'editor' then -- Floating window
+    local changes = {
+      up = { height = -self.opts.resize_amount },
+      down = { height = self.opts.resize_amount },
+      left = { width = -self.opts.resize_amount },
+      right = { width = self.opts.resize_amount }
+    }
+
+    self:update_float_position(win, changes[direction] or {})
+  else -- Regular window
+    local cmd = {
+      up = 'resize -' .. self.opts.resize_amount,
+      down = 'resize +' .. self.opts.resize_amount,
+      left = 'vertical resize -' .. self.opts.resize_amount,
+      right = 'vertical resize +' .. self.opts.resize_amount
+    }
+    vim.cmd(cmd[direction])
+  end
+end
+
+-- Send buffer content to REPL
+function Neaterm:send_buffer_to_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+
+  if text ~= "" then
+    self:add_to_history(text, self.current_repl.filetype)
+    self:send_text(text)
+  end
+end
+
+-- Send selection to REPL
+-- function Neaterm:send_selection_to_repl()
+--   if not self.current_repl then
+--     vim.notify("No active REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   local text = utils.get_visual_selection()
+--   if text ~= "" then
+--     self:add_to_history(text, self.current_repl.filetype)
+--     self:send_text(text)
+--   end
+-- end
+
+-- Add to history with proper checks
+function Neaterm:add_to_history(text, filetype)
+  if not text or text == "" or not filetype then return end
+
+  if not self.history[filetype] then
+    self.history[filetype] = {}
+  end
+
+  -- Remove duplicate if exists
+  for i, item in ipairs(self.history[filetype]) do
+    if item == text then
+      table.remove(self.history[filetype], i)
+      break
+    end
+  end
+
+  -- Add to start of history
+  table.insert(self.history[filetype], 1, text)
+
+  -- Limit history size
+  while #self.history[filetype] > (self.opts.repl.max_history or 100) do
+    table.remove(self.history[filetype])
+  end
+
+  -- Save history if enabled
+  if self.opts.repl.save_history then
+    self:save_repl_history()
+  end
+end
+
+-- Clear REPL
+function Neaterm:clear_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  self:send_text("\x0c") -- Send Ctrl-L to clear screen
+end
+
+-- Restart REPL
+function Neaterm:restart_repl()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local current_config = {
+    cmd = self.current_repl.config.cmd,
+    type = self.current_repl.type,
+    filetype = self.current_repl.filetype
+  }
+
+  self:safe_close_repl()
+
+  vim.defer_fn(function()
+    self:start_repl(current_config)
+  end, 100)
+end
+
 return Neaterm
