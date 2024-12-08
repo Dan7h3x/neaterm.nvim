@@ -466,27 +466,27 @@ function Neaterm:format_text_for_repl(text)
 end
 
 -- Enhanced visual selection handling
-function Neaterm:send_selection_to_repl()
-  if not self:ensure_repl_exists() then return end
-
-  local mode = api.nvim_get_mode().mode
-  local text = self:get_visual_selection(mode)
-
-  if text and text ~= "" then
-    local lines_count = select(2, text:gsub("\n", "")) + 1
-    local success = self:send_text(text, {
-      add_to_history = true,
-      auto_create = true
-    })
-
-    if success then
-      -- Provide visual feedback
-      vim.api.nvim_exec([[normal! `<]], false) -- Return to selection start
-      vim.notify(string.format("Sent %d lines to %s REPL", lines_count,
-        self.current_repl.config.name), vim.log.levels.INFO)
-    end
-  end
-end
+-- function Neaterm:send_selection_to_repl()
+--   if not self:ensure_repl_exists() then return end
+--
+--   local mode = api.nvim_get_mode().mode
+--   local text = self:get_visual_selection(mode)
+--
+--   if text and text ~= "" then
+--     local lines_count = select(2, text:gsub("\n", "")) + 1
+--     local success = self:send_text(text, {
+--       add_to_history = true,
+--       auto_create = true
+--     })
+--
+--     if success then
+--       -- Provide visual feedback
+--       vim.api.nvim_exec([[normal! `<]], false) -- Return to selection start
+--       vim.notify(string.format("Sent %d lines to %s REPL", lines_count,
+--         self.current_repl.config.name), vim.log.levels.INFO)
+--     end
+--   end
+-- end
 
 -- Improved visual selection extraction
 function Neaterm:get_visual_selection(mode)
@@ -522,24 +522,24 @@ function Neaterm:get_visual_selection(mode)
 end
 
 -- VSCode-like buffer sending
-function Neaterm:send_buffer_to_repl()
-  if not self:ensure_repl_exists() then return end
-
-  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-  local text = table.concat(lines, "\n")
-
-  if text ~= "" then
-    local success = self:send_text(text, {
-      add_to_history = true,
-      auto_create = true
-    })
-
-    if success then
-      vim.notify(string.format("Sent buffer to %s REPL (%d lines)",
-        self.current_repl.config.name, #lines), vim.log.levels.INFO)
-    end
-  end
-end
+-- function Neaterm:send_buffer_to_repl()
+--   if not self:ensure_repl_exists() then return end
+--
+--   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+--   local text = table.concat(lines, "\n")
+--
+--   if text ~= "" then
+--     local success = self:send_text(text, {
+--       add_to_history = true,
+--       auto_create = true
+--     })
+--
+--     if success then
+--       vim.notify(string.format("Sent buffer to %s REPL (%d lines)",
+--         self.current_repl.config.name, #lines), vim.log.levels.INFO)
+--     end
+--   end
+-- end
 
 -- Send current line with context awareness
 function Neaterm:send_line_to_repl()
@@ -599,103 +599,103 @@ function Neaterm:get_code_block(start_line)
 end
 
 -- Repeat last REPL command with smart handling
-function Neaterm:repeat_last_command()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local ft = self.current_repl.filetype
-  if not self.history[ft] or #self.history[ft] == 0 then
-    vim.notify("No command history for current REPL", vim.log.levels.INFO)
-    return
-  end
-
-  local last_cmd = self.history[ft][1]
-  self:send_text(last_cmd, { add_to_history = false })
-  vim.notify("Repeated: " .. last_cmd:sub(1, 50) ..
-    (#last_cmd > 50 and "..." or ""), vim.log.levels.INFO)
-end
+-- function Neaterm:repeat_last_command()
+--   if not self.current_repl then
+--     vim.notify("No active REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   local ft = self.current_repl.filetype
+--   if not self.history[ft] or #self.history[ft] == 0 then
+--     vim.notify("No command history for current REPL", vim.log.levels.INFO)
+--     return
+--   end
+--
+--   local last_cmd = self.history[ft][1]
+--   self:send_text(last_cmd, { add_to_history = false })
+--   vim.notify("Repeated: " .. last_cmd:sub(1, 50) ..
+--     (#last_cmd > 50 and "..." or ""), vim.log.levels.INFO)
+-- end
 
 -- Clear REPL variables with language-specific handling
-function Neaterm:clear_repl_variables()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = self.repl_configs[self.current_repl.filetype]
-  if not config.clear_variables_cmd then
-    vim.notify("Clear variables not supported for this REPL", vim.log.levels.WARN)
-    return
-  end
-
-  -- Execute pre-clear commands if any
-  if config.pre_clear_cmds then
-    for _, cmd in ipairs(config.pre_clear_cmds) do
-      self:send_text(cmd, { add_to_history = false })
-    end
-  end
-
-  self:send_text(config.clear_variables_cmd, { add_to_history = false })
-
-  -- Execute post-clear commands if any
-  if config.post_clear_cmds then
-    for _, cmd in ipairs(config.post_clear_cmds) do
-      self:send_text(cmd, { add_to_history = false })
-    end
-  end
-
-  vim.notify("Cleared REPL variables", vim.log.levels.INFO)
-end
+-- function Neaterm:clear_repl_variables()
+--   if not self.current_repl then
+--     vim.notify("No active REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   local config = self.repl_configs[self.current_repl.filetype]
+--   if not config.clear_variables_cmd then
+--     vim.notify("Clear variables not supported for this REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   -- Execute pre-clear commands if any
+--   if config.pre_clear_cmds then
+--     for _, cmd in ipairs(config.pre_clear_cmds) do
+--       self:send_text(cmd, { add_to_history = false })
+--     end
+--   end
+--
+--   self:send_text(config.clear_variables_cmd, { add_to_history = false })
+--
+--   -- Execute post-clear commands if any
+--   if config.post_clear_cmds then
+--     for _, cmd in ipairs(config.post_clear_cmds) do
+--       self:send_text(cmd, { add_to_history = false })
+--     end
+--   end
+--
+--   vim.notify("Cleared REPL variables", vim.log.levels.INFO)
+-- end
 
 -- Save REPL session with advanced options
-function Neaterm:save_repl_session()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = self.repl_configs[self.current_repl.filetype]
-  if not config.save_session_cmd then
-    vim.notify("Session saving not supported for this REPL", vim.log.levels.WARN)
-    return
-  end
-
-  -- Create session directory if it doesn't exist
-  local session_dir = string.format("%s/neaterm/sessions/%s",
-    vim.fn.stdpath('data'),
-    self.current_repl.filetype
-  )
-  vim.fn.mkdir(session_dir, "p")
-
-  -- Generate session filename
-  local session_file = string.format("%s/session_%s.%s",
-    session_dir,
-    os.date("%Y%m%d_%H%M%S"),
-    config.session_extension or "txt"
-  )
-
-  -- Save session using REPL-specific command
-  self:send_text(string.format(config.save_session_cmd, session_file),
-    { add_to_history = false })
-
-  -- Save history alongside session
-  local history_file = session_file:gsub("%.[^.]+$", "_history.json")
-  local history_data = vim.json.encode({
-    timestamp = os.time(),
-    filetype = self.current_repl.filetype,
-    history = self.history[self.current_repl.filetype] or {}
-  })
-  local f = io.open(history_file, "w")
-  if f then
-    f:write(history_data)
-    f:close()
-  end
-
-  vim.notify(string.format("Saved REPL session to: %s", session_file),
-    vim.log.levels.INFO)
-end
+-- function Neaterm:save_repl_session()
+--   if not self.current_repl then
+--     vim.notify("No active REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   local config = self.repl_configs[self.current_repl.filetype]
+--   if not config.save_session_cmd then
+--     vim.notify("Session saving not supported for this REPL", vim.log.levels.WARN)
+--     return
+--   end
+--
+--   -- Create session directory if it doesn't exist
+--   local session_dir = string.format("%s/neaterm/sessions/%s",
+--     vim.fn.stdpath('data'),
+--     self.current_repl.filetype
+--   )
+--   vim.fn.mkdir(session_dir, "p")
+--
+--   -- Generate session filename
+--   local session_file = string.format("%s/session_%s.%s",
+--     session_dir,
+--     os.date("%Y%m%d_%H%M%S"),
+--     config.session_extension or "txt"
+--   )
+--
+--   -- Save session using REPL-specific command
+--   self:send_text(string.format(config.save_session_cmd, session_file),
+--     { add_to_history = false })
+--
+--   -- Save history alongside session
+--   local history_file = session_file:gsub("%.[^.]+$", "_history.json")
+--   local history_data = vim.json.encode({
+--     timestamp = os.time(),
+--     filetype = self.current_repl.filetype,
+--     history = self.history[self.current_repl.filetype] or {}
+--   })
+--   local f = io.open(history_file, "w")
+--   if f then
+--     f:write(history_data)
+--     f:close()
+--   end
+--
+--   vim.notify(string.format("Saved REPL session to: %s", session_file),
+--     vim.log.levels.INFO)
+-- end
 
 -- REPL Configuration Methods
 function Neaterm:setup_repl_configs()
@@ -1247,67 +1247,67 @@ end
 -- Add these methods to the Neaterm class
 
 -- Send buffer content to REPL
--- function Neaterm:send_buffer_to_repl()
---   if self:ensure_repl_exists() then
---     local lines = api.nvim_buf_get_lines(0, 0, -1, false)
---     local text = table.concat(lines, "\n")
---
---     if text ~= "" then
---       self:add_to_history(text, self.current_repl.filetype)
---       self:send_text(text)
---     end
---   end
--- end
+function Neaterm:send_buffer_to_repl()
+  if self:ensure_repl_exists() then
+    local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+    local text = table.concat(lines, "\n")
+
+    if text ~= "" then
+      self:add_to_history(text, self.current_repl.filetype)
+      self:send_text(text)
+    end
+  end
+end
 
 -- Send selection to REPL
--- function Neaterm:send_selection_to_repl()
---   if not self:ensure_repl_exists() then
---     return
---   end
---
---   local mode = api.nvim_get_mode().mode
---   local text = ""
---
---   if mode == 'v' or mode == 'V' or mode == '' then
---     -- Get visual selection boundaries
---     local start_pos = vim.fn.getpos("'<")
---     local end_pos = vim.fn.getpos("'>")
---     local start_row, start_col = start_pos[2], start_pos[3]
---     local end_row, end_col = end_pos[2], end_pos[3]
---
---     -- Handle different visual modes
---     if mode == 'v' then -- Charwise visual
---       local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
---       if #lines == 1 then
---         text = lines[1]:sub(start_col, end_col)
---       else
---         lines[1] = lines[1]:sub(start_col)
---         lines[#lines] = lines[#lines]:sub(1, end_col)
---         text = table.concat(lines, "\n")
---       end
---     elseif mode == 'V' then -- Linewise visual
---       text = table.concat(api.nvim_buf_get_lines(0, start_row - 1, end_row, false), "\n")
---     elseif mode == '' then  -- Block visual
---       local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
---       local result = {}
---       for _, line in ipairs(lines) do
---         if #line >= start_col then
---           table.insert(result, line:sub(start_col, math.min(end_col, #line)))
---         end
---       end
---       text = table.concat(result, "\n")
---     end
---
---     if text ~= "" then
---       self:add_to_history(text, self.current_repl.filetype)
---       self:send_text(text)
---
---       -- Provide feedback
---       vim.notify(string.format("Sent %d lines to %s REPL", select(2, text:gsub("\n", "")) + 1,
---         self.current_repl.config.name), vim.log.levels.INFO)
---     end
---   end
--- end
+function Neaterm:send_selection_to_repl()
+  if not self:ensure_repl_exists() then
+    return
+  end
+
+  local mode = api.nvim_get_mode().mode
+  local text = ""
+
+  if mode == 'v' or mode == 'V' or mode == '' then
+    -- Get visual selection boundaries
+    local start_pos = vim.fn.getpos("'<")
+    local end_pos = vim.fn.getpos("'>")
+    local start_row, start_col = start_pos[2], start_pos[3]
+    local end_row, end_col = end_pos[2], end_pos[3]
+
+    -- Handle different visual modes
+    if mode == 'v' then -- Charwise visual
+      local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
+      if #lines == 1 then
+        text = lines[1]:sub(start_col, end_col)
+      else
+        lines[1] = lines[1]:sub(start_col)
+        lines[#lines] = lines[#lines]:sub(1, end_col)
+        text = table.concat(lines, "\n")
+      end
+    elseif mode == 'V' then -- Linewise visual
+      text = table.concat(api.nvim_buf_get_lines(0, start_row - 1, end_row, false), "\n")
+    elseif mode == '' then  -- Block visual
+      local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
+      local result = {}
+      for _, line in ipairs(lines) do
+        if #line >= start_col then
+          table.insert(result, line:sub(start_col, math.min(end_col, #line)))
+        end
+      end
+      text = table.concat(result, "\n")
+    end
+
+    if text ~= "" then
+      self:add_to_history(text, self.current_repl.filetype)
+      self:send_text(text)
+
+      -- Provide feedback
+      vim.notify(string.format("Sent %d lines to %s REPL", select(2, text:gsub("\n", "")) + 1,
+        self.current_repl.config.name), vim.log.levels.INFO)
+    end
+  end
+end
 
 -- Add to history with proper checks
 function Neaterm:add_to_history(text, filetype)
@@ -1637,6 +1637,62 @@ function Neaterm:ensure_repl_exists()
     end
   end
   return true
+end
+
+-- Add method to execute last command
+function Neaterm:repeat_last_command()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local ft = self.current_repl.filetype
+  if not self.history[ft] or #self.history[ft] == 0 then
+    vim.notify("No command history for current REPL", vim.log.levels.INFO)
+    return
+  end
+
+  self:send_text(self.history[ft][1])
+  vim.notify("Repeated last command", vim.log.levels.INFO)
+end
+
+-- Add method to clear REPL variables
+function Neaterm:clear_repl_variables()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if config.clear_variables_cmd then
+    self:send_text(config.clear_variables_cmd)
+    vim.notify("Cleared REPL variables", vim.log.levels.INFO)
+  else
+    vim.notify("Clear variables command not configured for this REPL", vim.log.levels.WARN)
+  end
+end
+
+-- Add method to save REPL session
+function Neaterm:save_repl_session()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if config.save_session_cmd then
+    local session_file = string.format("%s/neaterm_%s_session_%s.%s",
+      vim.fn.stdpath('data'),
+      self.current_repl.filetype,
+      os.date("%Y%m%d_%H%M%S"),
+      config.session_extension or "txt"
+    )
+
+    self:send_text(string.format(config.save_session_cmd, session_file))
+    vim.notify("Saved REPL session to: " .. session_file, vim.log.levels.INFO)
+  else
+    vim.notify("Save session command not configured for this REPL", vim.log.levels.WARN)
+  end
 end
 
 return Neaterm
