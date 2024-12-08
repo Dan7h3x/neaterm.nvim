@@ -396,14 +396,19 @@ function Neaterm:save_repl_history()
   end
 end
 
--- Text Sending Methods
-function Neaterm:send_text(text)
+-- Text Sending Methods with improved handling
+function Neaterm:send_text(text, opts)
   if not text then return end
+  opts = opts or {}
 
   local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
   if not term_buf or not self.terminals[term_buf] then
-    vim.notify("No active terminal", vim.log.levels.WARN)
-    return
+    if opts.auto_create and self:ensure_repl_exists() then
+      term_buf = self.current_repl.buf
+    else
+      vim.notify("No active REPL", vim.log.levels.WARN)
+      return
+    end
   end
 
   local term = self.terminals[term_buf]
@@ -416,27 +421,280 @@ function Neaterm:send_text(text)
     return
   end
 
-  local formatted_text = tostring(text)
-  if not formatted_text:match("\n$") then
-    formatted_text = formatted_text .. "\n"
-  end
-
+  -- Format text based on REPL config
+  local formatted_text = self:format_text_for_repl(text)
+  
   -- Safely send text to terminal
   local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
   if not success then
     vim.notify("Failed to send text: " .. err, vim.log.levels.ERROR)
+    return false
+  end
+
+  -- Add to history if successful
+  if self.current_repl and opts.add_to_history ~= false then
+    self:add_to_history(text, self.current_repl.filetype)
+  end
+
+  return true
+end
+
+-- Format text based on REPL configuration
+function Neaterm:format_text_for_repl(text)
+  if not self.current_repl then
+    return text .. "\n"
+  end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config then
+    return text .. "\n"
+  end
+
+  -- Apply language-specific formatting
+  local formatted = text
+  if config.format_text then
+    formatted = config.format_text(text)
+  else
+    -- Default formatting rules
+    formatted = formatted:gsub("\r\n", "\n") -- Normalize line endings
+    if not formatted:match("\n$") then
+      formatted = formatted .. "\n"
+    end
+  end
+
+  return formatted
+end
+
+-- Enhanced visual selection handling
+function Neaterm:send_selection_to_repl()
+  if not self:ensure_repl_exists() then return end
+
+  local mode = api.nvim_get_mode().mode
+  local text = self:get_visual_selection(mode)
+  
+  if text and text ~= "" then
+    local lines_count = select(2, text:gsub("\n", "")) + 1
+    local success = self:send_text(text, {
+      add_to_history = true,
+      auto_create = true
+    })
+
+    if success then
+      -- Provide visual feedback
+      vim.api.nvim_exec([[normal! `<]], false) -- Return to selection start
+      vim.notify(string.format("Sent %d lines to %s REPL", lines_count,
+        self.current_repl.config.name), vim.log.levels.INFO)
+    end
   end
 end
 
+-- Improved visual selection extraction
+function Neaterm:get_visual_selection(mode)
+  local start_pos = vim.fn.getpos("'<")
+  local end_pos = vim.fn.getpos("'>")
+  local start_row, start_col = start_pos[2], start_pos[3]
+  local end_row, end_col = end_pos[2], end_pos[3]
+
+  -- Get the selected lines
+  local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
+  if #lines == 0 then return nil end
+
+  -- Handle different visual modes
+  if mode == 'v' then -- Charwise visual
+    if #lines == 1 then
+      lines[1] = lines[1]:sub(start_col, end_col)
+    else
+      lines[1] = lines[1]:sub(start_col)
+      lines[#lines] = lines[#lines]:sub(1, end_col)
+    end
+  elseif mode == '' then -- Block visual
+    local new_lines = {}
+    for _, line in ipairs(lines) do
+      if #line >= start_col then
+        table.insert(new_lines, line:sub(start_col, math.min(end_col, #line)))
+      end
+    end
+    lines = new_lines
+  end
+  -- Mode 'V' (linewise) doesn't need special handling
+
+  return table.concat(lines, "\n")
+end
+
+-- VSCode-like buffer sending
+function Neaterm:send_buffer_to_repl()
+  if not self:ensure_repl_exists() then return end
+
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+  
+  if text ~= "" then
+    local success = self:send_text(text, {
+      add_to_history = true,
+      auto_create = true
+    })
+
+    if success then
+      vim.notify(string.format("Sent buffer to %s REPL (%d lines)",
+        self.current_repl.config.name, #lines), vim.log.levels.INFO)
+    end
+  end
+end
+
+-- Send current line with context awareness
 function Neaterm:send_line_to_repl()
+  if not self:ensure_repl_exists() then return end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  local line_num = vim.api.nvim_win_get_cursor(0)[1]
+  local line = api.nvim_get_current_line()
+
+  -- Handle multi-line statements (e.g., Python if/for blocks)
+  if config.is_block_start and config.is_block_start(line) then
+    local block = self:get_code_block(line_num)
+    if block then
+      self:send_text(block, {
+        add_to_history = true,
+        auto_create = true
+      })
+      return
+    end
+  end
+
+  if line:match("^%s*$") then
+    vim.notify("Current line is empty", vim.log.levels.WARN)
+    return
+  end
+
+  local success = self:send_text(line, {
+    add_to_history = true,
+    auto_create = true
+  })
+
+  if success then
+    vim.notify("Sent line to REPL", vim.log.levels.INFO)
+  end
+end
+
+-- Get complete code block (for languages with significant whitespace)
+function Neaterm:get_code_block(start_line)
+  local lines = api.nvim_buf_get_lines(0, start_line - 1, -1, false)
+  local block = {lines[1]}
+  local base_indent = lines[1]:match("^%s*"):len()
+  
+  for i = 2, #lines do
+    local line = lines[i]
+    local indent = line:match("^%s*"):len()
+    
+    if line:match("^%s*$") then
+      table.insert(block, line)
+    elseif indent <= base_indent then
+      break
+    else
+      table.insert(block, line)
+    end
+  end
+
+  return table.concat(block, "\n")
+end
+
+-- Repeat last REPL command with smart handling
+function Neaterm:repeat_last_command()
   if not self.current_repl then
     vim.notify("No active REPL", vim.log.levels.WARN)
     return
   end
 
-  local line = api.nvim_get_current_line()
-  self:add_to_history(line, self.current_repl.filetype)
-  self:send_text(line)
+  local ft = self.current_repl.filetype
+  if not self.history[ft] or #self.history[ft] == 0 then
+    vim.notify("No command history for current REPL", vim.log.levels.INFO)
+    return
+  end
+
+  local last_cmd = self.history[ft][1]
+  self:send_text(last_cmd, { add_to_history = false })
+  vim.notify("Repeated: " .. last_cmd:sub(1, 50) .. 
+    (#last_cmd > 50 and "..." or ""), vim.log.levels.INFO)
+end
+
+-- Clear REPL variables with language-specific handling
+function Neaterm:clear_repl_variables()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config.clear_variables_cmd then
+    vim.notify("Clear variables not supported for this REPL", vim.log.levels.WARN)
+    return
+  end
+
+  -- Execute pre-clear commands if any
+  if config.pre_clear_cmds then
+    for _, cmd in ipairs(config.pre_clear_cmds) do
+      self:send_text(cmd, { add_to_history = false })
+    end
+  end
+
+  self:send_text(config.clear_variables_cmd, { add_to_history = false })
+  
+  -- Execute post-clear commands if any
+  if config.post_clear_cmds then
+    for _, cmd in ipairs(config.post_clear_cmds) do
+      self:send_text(cmd, { add_to_history = false })
+    end
+  end
+
+  vim.notify("Cleared REPL variables", vim.log.levels.INFO)
+end
+
+-- Save REPL session with advanced options
+function Neaterm:save_repl_session()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config.save_session_cmd then
+    vim.notify("Session saving not supported for this REPL", vim.log.levels.WARN)
+    return
+  end
+
+  -- Create session directory if it doesn't exist
+  local session_dir = string.format("%s/neaterm/sessions/%s",
+    vim.fn.stdpath('data'),
+    self.current_repl.filetype
+  )
+  vim.fn.mkdir(session_dir, "p")
+
+  -- Generate session filename
+  local session_file = string.format("%s/session_%s.%s",
+    session_dir,
+    os.date("%Y%m%d_%H%M%S"),
+    config.session_extension or "txt"
+  )
+
+  -- Save session using REPL-specific command
+  self:send_text(string.format(config.save_session_cmd, session_file),
+    { add_to_history = false })
+
+  -- Save history alongside session
+  local history_file = session_file:gsub("%.[^.]+$", "_history.json")
+  local history_data = vim.json.encode({
+    timestamp = os.time(),
+    filetype = self.current_repl.filetype,
+    history = self.history[self.current_repl.filetype] or {}
+  })
+  local f = io.open(history_file, "w")
+  if f then
+    f:write(history_data)
+    f:close()
+  end
+
+  vim.notify(string.format("Saved REPL session to: %s", session_file),
+    vim.log.levels.INFO)
 end
 
 -- REPL Configuration Methods
