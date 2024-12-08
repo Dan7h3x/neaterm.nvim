@@ -94,6 +94,9 @@ local default_opts = {
     repl_history = '<leader>rh',
     repl_variables = '<leader>rv',
     repl_restart = '<leader>rR',
+    repl_repeat_last = '<leader>r.',
+    repl_clear_vars = '<leader>rx',
+    repl_save_session = '<leader>rs',
   },
 
   -- REPL configurations
