@@ -40,7 +40,7 @@ function Neaterm:setup_keymaps()
   local opts = { noremap = true, silent = true }
   local maps = {
     -- Basic terminal operations
-    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,     desc = "Toggle terminal",     mode = { 'n', 't' } },
+    { key = self.opts.keymaps.toggle,            func = function() self:toggle_terminal() end,      desc = "Toggle terminal",          mode = { 'n', 't' } },
     {
       key = self.opts.keymaps.new_vertical,
       func = function() self:create_terminal({ type = 'vertical' }) end,
@@ -107,18 +107,18 @@ function Neaterm:setup_keymaps()
     },
 
     -- REPL operations
-    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,      desc = "Toggle REPL menu",    mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,   desc = "Send line to REPL",   mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end, desc = "Send buffer to REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,          desc = "Clear REPL",          mode = { 'n' } },
-    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,        desc = "Show REPL history",   mode = { 'n' } },
-    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,      desc = "Show REPL variables", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,        desc = "Restart REPL",        mode = { 'n' } },
-    { key = self.opts.keymaps.repl_repeat_last, func = function() self:repeat_last_command() end, desc = "Repeat last REPL command", mode = { 'n' } },
-  { key = self.opts.keymaps.repl_clear_vars, func = function() self:clear_repl_variables() end, desc = "Clear REPL variables", mode = { 'n' } },
-  { key = self.opts.keymaps.repl_save_session, func = function() self:save_repl_session() end, desc = "Save REPL session", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_toggle,       func = function() self:show_repl_menu() end,       desc = "Toggle REPL menu",         mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_line,    func = function() self:send_line_to_repl() end,    desc = "Send line to REPL",        mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_buffer,  func = function() self:send_buffer_to_repl() end,  desc = "Send buffer to REPL",      mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear,        func = function() self:clear_repl() end,           desc = "Clear REPL",               mode = { 'n' } },
+    { key = self.opts.keymaps.repl_history,      func = function() self:show_history() end,         desc = "Show REPL history",        mode = { 'n' } },
+    { key = self.opts.keymaps.repl_variables,    func = function() self:show_variables() end,       desc = "Show REPL variables",      mode = { 'n' } },
+    { key = self.opts.keymaps.repl_restart,      func = function() self:restart_repl() end,         desc = "Restart REPL",             mode = { 'n' } },
+    { key = self.opts.keymaps.repl_repeat_last,  func = function() self:repeat_last_command() end,  desc = "Repeat last REPL command", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear_vars,   func = function() self:clear_repl_variables() end, desc = "Clear REPL variables",     mode = { 'n' } },
+    { key = self.opts.keymaps.repl_save_session, func = function() self:save_repl_session() end,    desc = "Save REPL session",        mode = { 'n' } },
     -- Bar operations
-    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,           desc = "Focus bar",           mode = { 'n' } },
+    { key = self.opts.keymaps.focus_bar,         func = function() self:focus_bar() end,            desc = "Focus bar",                mode = { 'n' } },
   }
 
   -- Set normal mode mappings
@@ -423,7 +423,7 @@ function Neaterm:send_text(text, opts)
 
   -- Format text based on REPL config
   local formatted_text = self:format_text_for_repl(text)
-  
+
   -- Safely send text to terminal
   local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
   if not success then
@@ -471,7 +471,7 @@ function Neaterm:send_selection_to_repl()
 
   local mode = api.nvim_get_mode().mode
   local text = self:get_visual_selection(mode)
-  
+
   if text and text ~= "" then
     local lines_count = select(2, text:gsub("\n", "")) + 1
     local success = self:send_text(text, {
@@ -527,7 +527,7 @@ function Neaterm:send_buffer_to_repl()
 
   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
   local text = table.concat(lines, "\n")
-  
+
   if text ~= "" then
     local success = self:send_text(text, {
       add_to_history = true,
@@ -579,13 +579,13 @@ end
 -- Get complete code block (for languages with significant whitespace)
 function Neaterm:get_code_block(start_line)
   local lines = api.nvim_buf_get_lines(0, start_line - 1, -1, false)
-  local block = {lines[1]}
+  local block = { lines[1] }
   local base_indent = lines[1]:match("^%s*"):len()
-  
+
   for i = 2, #lines do
     local line = lines[i]
     local indent = line:match("^%s*"):len()
-    
+
     if line:match("^%s*$") then
       table.insert(block, line)
     elseif indent <= base_indent then
@@ -613,7 +613,7 @@ function Neaterm:repeat_last_command()
 
   local last_cmd = self.history[ft][1]
   self:send_text(last_cmd, { add_to_history = false })
-  vim.notify("Repeated: " .. last_cmd:sub(1, 50) .. 
+  vim.notify("Repeated: " .. last_cmd:sub(1, 50) ..
     (#last_cmd > 50 and "..." or ""), vim.log.levels.INFO)
 end
 
@@ -638,7 +638,7 @@ function Neaterm:clear_repl_variables()
   end
 
   self:send_text(config.clear_variables_cmd, { add_to_history = false })
-  
+
   -- Execute post-clear commands if any
   if config.post_clear_cmds then
     for _, cmd in ipairs(config.post_clear_cmds) do
@@ -1247,67 +1247,67 @@ end
 -- Add these methods to the Neaterm class
 
 -- Send buffer content to REPL
-function Neaterm:send_buffer_to_repl()
-  if self:ensure_repl_exists() then
-    local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-    local text = table.concat(lines, "\n")
-
-    if text ~= "" then
-      self:add_to_history(text, self.current_repl.filetype)
-      self:send_text(text)
-    end
-  end
-end
+-- function Neaterm:send_buffer_to_repl()
+--   if self:ensure_repl_exists() then
+--     local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+--     local text = table.concat(lines, "\n")
+--
+--     if text ~= "" then
+--       self:add_to_history(text, self.current_repl.filetype)
+--       self:send_text(text)
+--     end
+--   end
+-- end
 
 -- Send selection to REPL
-function Neaterm:send_selection_to_repl()
-  if not self:ensure_repl_exists() then
-    return
-  end
-
-  local mode = api.nvim_get_mode().mode
-  local text = ""
-
-  if mode == 'v' or mode == 'V' or mode == '' then
-    -- Get visual selection boundaries
-    local start_pos = vim.fn.getpos("'<")
-    local end_pos = vim.fn.getpos("'>")
-    local start_row, start_col = start_pos[2], start_pos[3]
-    local end_row, end_col = end_pos[2], end_pos[3]
-
-    -- Handle different visual modes
-    if mode == 'v' then  -- Charwise visual
-      local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
-      if #lines == 1 then
-        text = lines[1]:sub(start_col, end_col)
-      else
-        lines[1] = lines[1]:sub(start_col)
-        lines[#lines] = lines[#lines]:sub(1, end_col)
-        text = table.concat(lines, "\n")
-      end
-    elseif mode == 'V' then  -- Linewise visual
-      text = table.concat(api.nvim_buf_get_lines(0, start_row - 1, end_row, false), "\n")
-    elseif mode == '' then  -- Block visual
-      local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
-      local result = {}
-      for _, line in ipairs(lines) do
-        if #line >= start_col then
-          table.insert(result, line:sub(start_col, math.min(end_col, #line)))
-        end
-      end
-      text = table.concat(result, "\n")
-    end
-
-    if text ~= "" then
-      self:add_to_history(text, self.current_repl.filetype)
-      self:send_text(text)
-      
-      -- Provide feedback
-      vim.notify(string.format("Sent %d lines to %s REPL", select(2, text:gsub("\n", "")) + 1,
-        self.current_repl.config.name), vim.log.levels.INFO)
-    end
-  end
-end
+-- function Neaterm:send_selection_to_repl()
+--   if not self:ensure_repl_exists() then
+--     return
+--   end
+--
+--   local mode = api.nvim_get_mode().mode
+--   local text = ""
+--
+--   if mode == 'v' or mode == 'V' or mode == '' then
+--     -- Get visual selection boundaries
+--     local start_pos = vim.fn.getpos("'<")
+--     local end_pos = vim.fn.getpos("'>")
+--     local start_row, start_col = start_pos[2], start_pos[3]
+--     local end_row, end_col = end_pos[2], end_pos[3]
+--
+--     -- Handle different visual modes
+--     if mode == 'v' then -- Charwise visual
+--       local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
+--       if #lines == 1 then
+--         text = lines[1]:sub(start_col, end_col)
+--       else
+--         lines[1] = lines[1]:sub(start_col)
+--         lines[#lines] = lines[#lines]:sub(1, end_col)
+--         text = table.concat(lines, "\n")
+--       end
+--     elseif mode == 'V' then -- Linewise visual
+--       text = table.concat(api.nvim_buf_get_lines(0, start_row - 1, end_row, false), "\n")
+--     elseif mode == '' then  -- Block visual
+--       local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
+--       local result = {}
+--       for _, line in ipairs(lines) do
+--         if #line >= start_col then
+--           table.insert(result, line:sub(start_col, math.min(end_col, #line)))
+--         end
+--       end
+--       text = table.concat(result, "\n")
+--     end
+--
+--     if text ~= "" then
+--       self:add_to_history(text, self.current_repl.filetype)
+--       self:send_text(text)
+--
+--       -- Provide feedback
+--       vim.notify(string.format("Sent %d lines to %s REPL", select(2, text:gsub("\n", "")) + 1,
+--         self.current_repl.config.name), vim.log.levels.INFO)
+--     end
+--   end
+-- end
 
 -- Add to history with proper checks
 function Neaterm:add_to_history(text, filetype)
@@ -1622,7 +1622,7 @@ function Neaterm:ensure_repl_exists()
   if not self.current_repl then
     local ft = vim.bo.filetype
     local config = self.repl_configs[ft]
-    
+
     if config then
       vim.notify(string.format("Creating %s REPL...", config.name), vim.log.levels.INFO)
       self:start_repl({
@@ -1637,62 +1637,6 @@ function Neaterm:ensure_repl_exists()
     end
   end
   return true
-end
-
--- Add method to execute last command
-function Neaterm:repeat_last_command()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local ft = self.current_repl.filetype
-  if not self.history[ft] or #self.history[ft] == 0 then
-    vim.notify("No command history for current REPL", vim.log.levels.INFO)
-    return
-  end
-
-  self:send_text(self.history[ft][1])
-  vim.notify("Repeated last command", vim.log.levels.INFO)
-end
-
--- Add method to clear REPL variables
-function Neaterm:clear_repl_variables()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = self.repl_configs[self.current_repl.filetype]
-  if config.clear_variables_cmd then
-    self:send_text(config.clear_variables_cmd)
-    vim.notify("Cleared REPL variables", vim.log.levels.INFO)
-  else
-    vim.notify("Clear variables command not configured for this REPL", vim.log.levels.WARN)
-  end
-end
-
--- Add method to save REPL session
-function Neaterm:save_repl_session()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = self.repl_configs[self.current_repl.filetype]
-  if config.save_session_cmd then
-    local session_file = string.format("%s/neaterm_%s_session_%s.%s",
-      vim.fn.stdpath('data'),
-      self.current_repl.filetype,
-      os.date("%Y%m%d_%H%M%S"),
-      config.session_extension or "txt"
-    )
-    
-    self:send_text(string.format(config.save_session_cmd, session_file))
-    vim.notify("Saved REPL session to: " .. session_file, vim.log.levels.INFO)
-  else
-    vim.notify("Save session command not configured for this REPL", vim.log.levels.WARN)
-  end
 end
 
 return Neaterm
