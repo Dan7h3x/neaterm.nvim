@@ -67,17 +67,20 @@ function M.create_user_commands(neaterm)
     NeatermHorizontal = {
       callback = function(opts)
         neaterm:create_terminal({ type = 'horizontal', cmd = get_terminal_cmd(opts) })
-      end
+      end,
+      nargs = "*",
     },
     NeatermFloat = {
       callback = function(opts)
         neaterm:create_terminal({ type = 'float', cmd = get_terminal_cmd(opts) })
-      end
+      end,
+      nargs = "*",
     },
     NeatermFull = {
       callback = function(opts)
         neaterm:create_terminal({ type = 'full', cmd = get_terminal_cmd(opts) })
-      end
+      end,
+      nargs = "*",
     },
     NeatermToggle = {
       callback = function()

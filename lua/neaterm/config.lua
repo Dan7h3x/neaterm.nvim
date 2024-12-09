@@ -97,6 +97,15 @@ local default_opts = {
     repl_repeat_last = '<leader>r.',
     repl_clear_vars = '<leader>rx',
     repl_save_session = '<leader>rs',
+    cell_next = ']c',
+    cell_prev = '[c',
+    cell_execute = '<leader>x',
+    smart_send = '<leader>sb',
+    inspect_var = '<leader>sv',
+    save_session = '<leader>ts',
+    restore_session = '<leader>tr',
+    toggle_output = '<leader>to',
+    clear_output = '<leader>tc',
   },
 
   -- REPL configurations
@@ -123,11 +132,21 @@ local default_opts = {
       get_variables_cmd = "whos",
       inspect_variable_cmd = "?",
       exit_cmd = "exit()",
-      clear_variables_cmd = "clear",
+      clear_variables_cmd = "%reset -f",
       save_session_cmd = "save_session('%s')",
       session_extension = "json",
       pre_clear_cmds = {},
       post_clear_cmds = {},
+      smart_indent = true,
+      auto_dedent = true,
+      ipython_features = true,
+      magic_commands = true,
+      variable_explorer = {
+        enabled = true,
+        auto_update = true,
+        update_interval = 1000,
+      },
+      debugger_integration = true,
     },
     r = {
       name = "R (Radian)",
@@ -145,6 +164,9 @@ local default_opts = {
       session_extension = "RData",
       pre_clear_cmds = {},
       post_clear_cmds = {},
+      plot_handling = true,
+      data_viewer = true,
+      package_management = true,
     },
     lua = {
       name = "Lua",
@@ -168,6 +190,9 @@ local default_opts = {
       session_extension = "json",
       pre_clear_cmds = {},
       post_clear_cmds = {},
+      console_features = true,
+      async_handling = true,
+      npm_integration = true,
     },
     sh = {
       name = "Shell",
@@ -198,6 +223,67 @@ local default_opts = {
     native_search = true,
     clipboard_sync = true,
     shell_integration = true,
+    smart_repl_detection = true,
+    cell_support = true,
+    output_capture = true,
+    session_management = true,
+  },
+
+  -- Cell configuration
+  cell = {
+    markers = {
+      "^%s*#%%",
+      "^%s*##",
+      "^%s*# %%",
+      "^%s*// %%",
+      "^%s*%% %%",
+    },
+    highlight = true,
+    auto_focus = true,
+    show_cell_numbers = true,
+  },
+
+  -- Output capture configuration
+  output = {
+    capture_timeout = 1000,
+    max_lines = 1000,
+    preview_time = 5000,
+    highlight = true,
+    float = {
+      border = "rounded",
+      width = 80,
+      height = 20,
+      title = "Output",
+    },
+  },
+
+  -- Session management
+  session = {
+    auto_save = true,
+    auto_restore = true,
+    save_path = vim.fn.stdpath('data') .. '/neaterm_sessions',
+    include_layout = true,
+    include_history = true,
+    include_variables = true,
+  },
+
+  -- Terminal enhancements
+  terminal = {
+    shell_integration = {
+      enabled = true,
+      prompt_detection = true,
+      command_highlighting = true,
+    },
+    scrollback = 10000,
+    search = {
+      incremental = true,
+      highlight = true,
+      ignore_case = true,
+    },
+    performance = {
+      refresh_rate = 60,
+      max_memory = 500,
+    },
   },
 }
 

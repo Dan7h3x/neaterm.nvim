@@ -545,22 +545,7 @@ end
 function Neaterm:send_line_to_repl()
   if not self:ensure_repl_exists() then return end
 
-  local config = self.repl_configs[self.current_repl.filetype]
-  local line_num = vim.api.nvim_win_get_cursor(0)[1]
   local line = api.nvim_get_current_line()
-
-  -- Handle multi-line statements (e.g., Python if/for blocks)
-  if config.is_block_start and config.is_block_start(line) then
-    local block = self:get_code_block(line_num)
-    if block then
-      self:send_text(block, {
-        add_to_history = true,
-        auto_create = true
-      })
-      return
-    end
-  end
-
   if line:match("^%s*$") then
     vim.notify("Current line is empty", vim.log.levels.WARN)
     return
@@ -1693,6 +1678,309 @@ function Neaterm:save_repl_session()
   else
     vim.notify("Save session command not configured for this REPL", vim.log.levels.WARN)
   end
+end
+
+-- Add these new methods to the Neaterm class
+
+-- Smart REPL detection and auto-setup
+function Neaterm:detect_repl_type()
+  local ft = vim.bo.filetype
+  local file_content = table.concat(api.nvim_buf_get_lines(0, 0, -1, false), "\n")
+  
+  -- Detect Python virtual environment
+  local venv = vim.fn.environ()['VIRTUAL_ENV']
+  if venv and ft == 'python' then
+    local python_path = venv .. '/bin/python'
+    if vim.fn.executable(python_path) == 1 then
+      return {
+        cmd = python_path .. " -m IPython --no-autoindent",
+        type = "float",
+        filetype = "python"
+      }
+    end
+  end
+
+  -- Detect Jupyter notebooks
+  if ft == 'python' and file_content:match("%%") then
+    return {
+      cmd = "jupyter console",
+      type = "float",
+      filetype = "python"
+    }
+  end
+
+  -- Default to configured REPL
+  return self.repl_configs[ft]
+end
+
+-- Smart code block detection
+function Neaterm:detect_code_block()
+  local cur_line = api.nvim_win_get_cursor(0)[1]
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local block_start, block_end = cur_line, cur_line
+  local base_indent = lines[cur_line]:match("^%s*")
+
+  -- Search backwards for block start
+  for i = cur_line - 1, 1, -1 do
+    local line = lines[i]
+    if line:match("^%s*$") or line:match("^%s*#") then
+      block_start = i + 1
+      break
+    end
+    if #line:match("^%s*") < #base_indent then
+      block_start = i + 1
+      break
+    end
+  end
+
+  -- Search forwards for block end
+  for i = cur_line + 1, #lines do
+    local line = lines[i]
+    if line:match("^%s*$") or line:match("^%s*#") then
+      block_end = i - 1
+      break
+    end
+    if #line:match("^%s*") < #base_indent then
+      block_end = i - 1
+      break
+    end
+  end
+
+  return table.concat(api.nvim_buf_get_lines(0, block_start - 1, block_end, false), "\n")
+end
+
+-- Smart send with auto-continuation
+function Neaterm:smart_send_text(text, opts)
+  if not self.current_repl then return end
+  
+  local ft = self.current_repl.filetype
+  local config = self.repl_configs[ft]
+  
+  -- Handle multi-line input for different REPLs
+  local handlers = {
+    python = function(txt)
+      -- Handle IPython's auto-continuation
+      return txt:gsub("\n", "\n.... ")
+    end,
+    r = function(txt)
+      -- R's continuation prompt
+      return txt:gsub("\n", "\n+ ")
+    end,
+    julia = function(txt)
+      -- Julia's continuation prompt
+      return txt:gsub("\n", "\n       ")
+    end
+  }
+
+  local handler = handlers[ft] or function(txt) return txt end
+  local formatted_text = handler(text)
+  
+  self:send_text(formatted_text, opts)
+end
+
+-- Add cell support (like Jupyter notebooks)
+function Neaterm:send_cell()
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local cur_line = api.nvim_win_get_cursor(0)[1]
+  local cell_start, cell_end
+
+  -- Find cell boundaries (marked by ##, #%%, or # %%)
+  for i = cur_line, 1, -1 do
+    if lines[i]:match("^%s*#%%") or lines[i]:match("^%s*##") then
+      cell_start = i
+      break
+    end
+  end
+
+  for i = cur_line, #lines do
+    if lines[i]:match("^%s*#%%") or lines[i]:match("^%s*##") then
+      cell_end = i - 1
+      break
+    end
+  end
+
+  if cell_start and cell_end then
+    local cell_content = table.concat(api.nvim_buf_get_lines(0, cell_start, cell_end, false), "\n")
+    self:smart_send_text(cell_content, { add_to_history = true })
+  end
+end
+
+-- Add output capture and display
+function Neaterm:capture_output(timeout)
+  if not self.current_repl then return end
+  
+  timeout = timeout or 1000
+  local output = ""
+  local start_time = vim.loop.now()
+  
+  -- Create temporary buffer for output
+  local temp_buf = api.nvim_create_buf(false, true)
+  local chan = self.terminals[self.current_repl.buf].job_id
+  
+  -- Setup output callback
+  local function on_output(_, data)
+    if data then
+      output = output .. table.concat(data, "\n")
+    end
+  end
+  
+  -- Attach to terminal output
+  vim.fn.jobstart(chan, {
+    on_stdout = on_output,
+    on_stderr = on_output
+  })
+  
+  -- Wait for output
+  vim.wait(timeout, function()
+    return vim.loop.now() - start_time >= timeout
+  end)
+  
+  -- Clean up
+  api.nvim_buf_delete(temp_buf, { force = true })
+  
+  return output
+end
+
+-- Add variable inspection with preview
+function Neaterm:inspect_variable(var_name)
+  if not self.current_repl then return end
+  
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config.inspect_variable_cmd then return end
+  
+  -- Send inspection command
+  local cmd = string.format(config.inspect_variable_cmd, var_name)
+  self:send_text(cmd, { add_to_history = false })
+  
+  -- Capture and display output
+  vim.defer_fn(function()
+    local output = self:capture_output()
+    if output and output ~= "" then
+      -- Create preview window
+      local lines = vim.split(output, "\n")
+      local buf = api.nvim_create_buf(false, true)
+      api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      
+      local width = math.min(#lines[1], 80)
+      local height = math.min(#lines, 20)
+      
+      local opts = {
+        relative = 'cursor',
+        width = width,
+        height = height,
+        row = 1,
+        col = 0,
+        style = 'minimal',
+        border = 'rounded'
+      }
+      
+      local win = api.nvim_open_win(buf, false, opts)
+      
+      -- Auto-close preview
+      vim.defer_fn(function()
+        if api.nvim_win_is_valid(win) then
+          api.nvim_win_close(win, true)
+        end
+        if api.nvim_buf_is_valid(buf) then
+          api.nvim_buf_delete(buf, { force = true })
+        end
+      end, 5000)
+    end
+  end, 100)
+end
+
+-- Add session management
+function Neaterm:save_session()
+  local session = {
+    terminals = {},
+    current_terminal = self.current_terminal,
+    current_repl = self.current_repl and {
+      filetype = self.current_repl.filetype,
+      type = self.current_repl.type,
+      cmd = self.current_repl.config.cmd
+    } or nil
+  }
+  
+  -- Save terminal states
+  for buf, term in pairs(self.terminals) do
+    if api.nvim_buf_is_valid(buf) then
+      session.terminals[buf] = {
+        cmd = term.cmd,
+        type = term.type,
+        cwd = vim.fn.getcwd(-1, buf)
+      }
+    end
+  end
+  
+  -- Save to file
+  local session_file = string.format("%s/neaterm_session.json", vim.fn.stdpath('data'))
+  local ok, encoded = pcall(vim.json.encode, session)
+  if ok then
+    local file = io.open(session_file, 'w')
+    if file then
+      file:write(encoded)
+      file:close()
+      vim.notify("Terminal session saved", vim.log.levels.INFO)
+    end
+  end
+end
+
+function Neaterm:restore_session()
+  local session_file = string.format("%s/neaterm_session.json", vim.fn.stdpath('data'))
+  local file = io.open(session_file, 'r')
+  if not file then return end
+  
+  local content = file:read("*all")
+  file:close()
+  
+  local ok, session = pcall(vim.json.decode, content)
+  if not ok then return end
+  
+  -- Restore terminals
+  for _, term in pairs(session.terminals) do
+    self:create_terminal({
+      cmd = term.cmd,
+      type = term.type,
+      cwd = term.cwd
+    })
+  end
+  
+  -- Restore REPL if needed
+  if session.current_repl then
+    self:start_repl(session.current_repl)
+  end
+  
+  vim.notify("Terminal session restored", vim.log.levels.INFO)
+end
+
+-- Add these to the setup_keymaps function
+function Neaterm:setup_additional_keymaps()
+  local opts = { noremap = true, silent = true }
+  
+  -- Cell navigation and execution
+  vim.keymap.set('n', self.opts.keymaps.cell_next or '[c', function()
+    -- Navigate to next cell
+  end, opts)
+  
+  vim.keymap.set('n', self.opts.keymaps.cell_prev or ']c', function()
+    -- Navigate to previous cell
+  end, opts)
+  
+  vim.keymap.set('n', self.opts.keymaps.cell_execute or '<leader>x', function()
+    self:send_cell()
+  end, opts)
+  
+  -- Smart block execution
+  vim.keymap.set('n', self.opts.keymaps.smart_send or '<leader>sb', function()
+    local block = self:detect_code_block()
+    self:smart_send_text(block, { add_to_history = true })
+  end, opts)
+  
+  -- Variable inspection
+  vim.keymap.set('n', self.opts.keymaps.inspect_var or '<leader>sv', function()
+    local word = vim.fn.expand('<cword>')
+    self:inspect_variable(word)
+  end, opts)
 end
 
 return Neaterm
