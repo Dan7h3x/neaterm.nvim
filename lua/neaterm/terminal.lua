@@ -1843,10 +1843,22 @@ end
 
 -- Add variable inspection with preview
 function Neaterm:inspect_variable(var_name)
-  if not self.current_repl then return end
+  if not self.current_repl then
+    vim.notify("No active REPL found", vim.log.levels.WARN)
+    return
+  end
   
   local config = self.repl_configs[self.current_repl.filetype]
-  if not config.inspect_variable_cmd then return end
+  if not config or not config.inspect_variable_cmd then
+    vim.notify("Variable inspection not configured for this REPL", vim.log.levels.WARN)
+    return
+  end
+  
+  -- Store current output capture state
+  local was_capturing = self.output_capture_enabled
+  if was_capturing then
+    self:stop_output_capture()
+  end
   
   -- Send inspection command
   local cmd = string.format(config.inspect_variable_cmd, var_name)
@@ -1854,15 +1866,15 @@ function Neaterm:inspect_variable(var_name)
   
   -- Capture and display output
   vim.defer_fn(function()
-    local output = self:capture_output()
+    local output = self:capture_output(self.opts.output.capture_timeout)
     if output and output ~= "" then
       -- Create preview window
       local lines = vim.split(output, "\n")
       local buf = api.nvim_create_buf(false, true)
       api.nvim_buf_set_lines(buf, 0, -1, false, lines)
       
-      local width = math.min(#lines[1], 80)
-      local height = math.min(#lines, 20)
+      local width = math.min(vim.fn.strdisplaywidth(lines[1] or ""), self.opts.output.float.width)
+      local height = math.min(#lines, self.opts.output.float.height)
       
       local opts = {
         relative = 'cursor',
@@ -1871,26 +1883,35 @@ function Neaterm:inspect_variable(var_name)
         row = 1,
         col = 0,
         style = 'minimal',
-        border = 'rounded'
+        border = self.opts.output.float.border,
+        title = " " .. var_name .. " ",
       }
       
       local win = api.nvim_open_win(buf, false, opts)
+      
+      -- Set buffer options
+      api.nvim_buf_set_option(buf, 'modifiable', false)
+      api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
       
       -- Auto-close preview
       vim.defer_fn(function()
         if api.nvim_win_is_valid(win) then
           api.nvim_win_close(win, true)
         end
-        if api.nvim_buf_is_valid(buf) then
-          api.nvim_buf_delete(buf, { force = true })
-        end
-      end, 5000)
+      end, self.opts.output.preview_time)
+      
+      -- Restore output capture if it was enabled
+      if was_capturing then
+        self:start_output_capture()
+      end
     end
   end, 100)
 end
 
 -- Add session management
 function Neaterm:save_session()
+  if not self.opts.session.auto_save then return end
+  
   local session = {
     terminals = {},
     current_terminal = self.current_terminal,
@@ -1898,7 +1919,10 @@ function Neaterm:save_session()
       filetype = self.current_repl.filetype,
       type = self.current_repl.type,
       cmd = self.current_repl.config.cmd
-    } or nil
+    } or nil,
+    layout = {},
+    history = self.opts.session.include_history and self.history or nil,
+    variables = self.opts.session.include_variables and self.variables or nil
   }
   
   -- Save terminal states
@@ -1909,40 +1933,80 @@ function Neaterm:save_session()
         type = term.type,
         cwd = vim.fn.getcwd(-1, buf)
       }
+      
+      -- Save window layout if enabled
+      if self.opts.session.include_layout then
+        local win = vim.fn.bufwinid(buf)
+        if win ~= -1 then
+          session.layout[buf] = {
+            width = api.nvim_win_get_width(win),
+            height = api.nvim_win_get_height(win),
+            config = api.nvim_win_get_config(win)
+          }
+        end
+      end
     end
   end
   
+  -- Ensure session directory exists
+  vim.fn.mkdir(self.opts.session.save_path, 'p')
+  
   -- Save to file
-  local session_file = string.format("%s/neaterm_session.json", vim.fn.stdpath('data'))
+  local session_file = string.format("%s/session_%s.json",
+    self.opts.session.save_path,
+    os.date("%Y%m%d_%H%M%S")
+  )
+  
   local ok, encoded = pcall(vim.json.encode, session)
   if ok then
     local file = io.open(session_file, 'w')
     if file then
       file:write(encoded)
       file:close()
-      vim.notify("Terminal session saved", vim.log.levels.INFO)
+      vim.notify("Terminal session saved: " .. session_file, vim.log.levels.INFO)
     end
   end
 end
 
 function Neaterm:restore_session()
-  local session_file = string.format("%s/neaterm_session.json", vim.fn.stdpath('data'))
-  local file = io.open(session_file, 'r')
+  if not self.opts.session.auto_restore then return end
+  
+  -- Find latest session file
+  local session_pattern = self.opts.session.save_path .. "/session_*.json"
+  local files = vim.fn.glob(session_pattern, false, true)
+  if #files == 0 then return end
+  
+  local latest_file = files[#files]
+  local file = io.open(latest_file, 'r')
   if not file then return end
   
   local content = file:read("*all")
   file:close()
   
   local ok, session = pcall(vim.json.decode, content)
-  if not ok then return end
+  if not ok then
+    vim.notify("Failed to restore session: Invalid session file", vim.log.levels.ERROR)
+    return
+  end
   
   -- Restore terminals
   for _, term in pairs(session.terminals) do
-    self:create_terminal({
+    local buf = self:create_terminal({
       cmd = term.cmd,
       type = term.type,
       cwd = term.cwd
     })
+    
+    -- Restore layout if enabled
+    if self.opts.session.include_layout and session.layout[buf] then
+      local layout = session.layout[buf]
+      local win = vim.fn.bufwinid(buf)
+      if win ~= -1 then
+        api.nvim_win_set_width(win, layout.width)
+        api.nvim_win_set_height(win, layout.height)
+        api.nvim_win_set_config(win, layout.config)
+      end
+    end
   end
   
   -- Restore REPL if needed
@@ -1950,7 +2014,16 @@ function Neaterm:restore_session()
     self:start_repl(session.current_repl)
   end
   
-  vim.notify("Terminal session restored", vim.log.levels.INFO)
+  -- Restore history and variables if included
+  if session.history and self.opts.session.include_history then
+    self.history = session.history
+  end
+  
+  if session.variables and self.opts.session.include_variables then
+    self.variables = session.variables
+  end
+  
+  vim.notify("Terminal session restored from: " .. latest_file, vim.log.levels.INFO)
 end
 
 -- Add these to the setup_keymaps function
@@ -1981,6 +2054,136 @@ function Neaterm:setup_additional_keymaps()
     local word = vim.fn.expand('<cword>')
     self:inspect_variable(word)
   end, opts)
+end
+
+-- Cell navigation methods
+function Neaterm:move_to_next_cell()
+  local cur_line = api.nvim_win_get_cursor(0)[1]
+  local lines = api.nvim_buf_get_lines(0, cur_line, -1, false)
+  
+  for i, line in ipairs(lines) do
+    for _, pattern in ipairs(self.opts.cell.markers) do
+      if line:match(pattern) then
+        -- Move to the found cell marker
+        api.nvim_win_set_cursor(0, {cur_line + i, 0})
+        if self.opts.cell.auto_focus then
+          vim.cmd('normal! zz') -- Center the view
+        end
+        return
+      end
+    end
+  end
+  vim.notify("No next cell found", vim.log.levels.INFO)
+end
+
+function Neaterm:move_to_previous_cell()
+  local cur_line = api.nvim_win_get_cursor(0)[1]
+  local lines = api.nvim_buf_get_lines(0, 0, cur_line - 1, false)
+  
+  for i = #lines, 1, -1 do
+    for _, pattern in ipairs(self.opts.cell.markers) do
+      if lines[i]:match(pattern) then
+        -- Move to the found cell marker
+        api.nvim_win_set_cursor(0, {i, 0})
+        if self.opts.cell.auto_focus then
+          vim.cmd('normal! zz') -- Center the view
+        end
+        return
+      end
+    end
+  end
+  vim.notify("No previous cell found", vim.log.levels.INFO)
+end
+
+-- Output capture methods
+function Neaterm:toggle_output_capture()
+  if not self.current_repl then
+    vim.notify("No active REPL found", vim.log.levels.WARN)
+    return
+  end
+
+  if self.output_capture_enabled then
+    self:stop_output_capture()
+  else
+    self:start_output_capture()
+  end
+end
+
+function Neaterm:start_output_capture()
+  if not self.current_repl then return end
+  
+  -- Create output buffer if it doesn't exist
+  if not self.output_buf or not api.nvim_buf_is_valid(self.output_buf) then
+    self.output_buf = api.nvim_create_buf(false, true)
+    api.nvim_buf_set_option(self.output_buf, 'buftype', 'nofile')
+    api.nvim_buf_set_option(self.output_buf, 'filetype', self.current_repl.filetype)
+  end
+
+  -- Create output window with configured options
+  local win_opts = vim.tbl_extend('force', {
+    relative = 'editor',
+    style = 'minimal',
+    border = self.opts.output.float.border,
+  }, self.opts.output.float)
+
+  self.output_win = api.nvim_open_win(self.output_buf, false, win_opts)
+  self.output_capture_enabled = true
+
+  -- Setup output capture
+  local chan = self.terminals[self.current_repl.buf].job_id
+  self.output_lines = {}
+  
+  self.output_callback = function(_, data)
+    if data then
+      -- Add new lines to output buffer
+      for _, line in ipairs(data) do
+        if #self.output_lines >= self.opts.output.max_lines then
+          table.remove(self.output_lines, 1)
+        end
+        table.insert(self.output_lines, line)
+      end
+      
+      -- Update output buffer
+      if api.nvim_buf_is_valid(self.output_buf) then
+        api.nvim_buf_set_lines(self.output_buf, 0, -1, false, self.output_lines)
+        
+        -- Apply syntax highlighting if enabled
+        if self.opts.output.highlight then
+          vim.cmd('syntax enable')
+        end
+      end
+    end
+  end
+
+  -- Attach to terminal output
+  vim.fn.jobstart(chan, {
+    on_stdout = self.output_callback,
+    on_stderr = self.output_callback,
+  })
+
+  vim.notify("Output capture started", vim.log.levels.INFO)
+end
+
+function Neaterm:stop_output_capture()
+  if self.output_win and api.nvim_win_is_valid(self.output_win) then
+    api.nvim_win_close(self.output_win, true)
+  end
+  
+  if self.output_callback then
+    -- Detach output callback
+    self.output_callback = nil
+  end
+  
+  self.output_capture_enabled = false
+  vim.notify("Output capture stopped", vim.log.levels.INFO)
+end
+
+function Neaterm:clear_output()
+  if self.output_buf and api.nvim_buf_is_valid(self.output_buf) then
+    api.nvim_buf_set_lines(self.output_buf, 0, -1, false, {})
+    self.output_lines = {}
+    vim.notify("Output cleared", vim.log.levels.INFO)
+  end
 end
 
 return Neaterm
