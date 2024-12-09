@@ -40,7 +40,7 @@ function Neaterm:setup_keymaps()
   local opts = { noremap = true, silent = true }
   local maps = {
     -- Basic terminal operations
-    { key = self.opts.keymaps.toggle,            func = function() self:toggle_terminal() end,      desc = "Toggle terminal",          mode = { 'n', 't' } },
+    { key = self.opts.keymaps.toggle,            func = function() self:toggle_terminal() end,       desc = "Toggle terminal",          mode = { 'n', 't' } },
     {
       key = self.opts.keymaps.new_vertical,
       func = function() self:create_terminal({ type = 'vertical' }) end,
@@ -107,18 +107,24 @@ function Neaterm:setup_keymaps()
     },
 
     -- REPL operations
-    { key = self.opts.keymaps.repl_toggle,       func = function() self:show_repl_menu() end,       desc = "Toggle REPL menu",         mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_line,    func = function() self:send_line_to_repl() end,    desc = "Send line to REPL",        mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_buffer,  func = function() self:send_buffer_to_repl() end,  desc = "Send buffer to REPL",      mode = { 'n' } },
-    { key = self.opts.keymaps.repl_clear,        func = function() self:clear_repl() end,           desc = "Clear REPL",               mode = { 'n' } },
-    { key = self.opts.keymaps.repl_history,      func = function() self:show_history() end,         desc = "Show REPL history",        mode = { 'n' } },
-    { key = self.opts.keymaps.repl_variables,    func = function() self:show_variables() end,       desc = "Show REPL variables",      mode = { 'n' } },
-    { key = self.opts.keymaps.repl_restart,      func = function() self:restart_repl() end,         desc = "Restart REPL",             mode = { 'n' } },
-    { key = self.opts.keymaps.repl_repeat_last,  func = function() self:repeat_last_command() end,  desc = "Repeat last REPL command", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_clear_vars,   func = function() self:clear_repl_variables() end, desc = "Clear REPL variables",     mode = { 'n' } },
-    { key = self.opts.keymaps.repl_save_session, func = function() self:save_repl_session() end,    desc = "Save REPL session",        mode = { 'n' } },
+    { key = self.opts.keymaps.repl_toggle,       func = function() self:show_repl_menu() end,        desc = "Toggle REPL menu",         mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_line,    func = function() self:send_line_to_repl() end,     desc = "Send line to REPL",        mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_buffer,  func = function() self:send_buffer_to_repl() end,   desc = "Send buffer to REPL",      mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear,        func = function() self:clear_repl() end,            desc = "Clear REPL",               mode = { 'n' } },
+    { key = self.opts.keymaps.repl_history,      func = function() self:show_history() end,          desc = "Show REPL history",        mode = { 'n' } },
+    { key = self.opts.keymaps.repl_variables,    func = function() self:show_variables() end,        desc = "Show REPL variables",      mode = { 'n' } },
+    { key = self.opts.keymaps.repl_restart,      func = function() self:restart_repl() end,          desc = "Restart REPL",             mode = { 'n' } },
+    { key = self.opts.keymaps.repl_repeat_last,  func = function() self:repeat_last_command() end,   desc = "Repeat last REPL command", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear_vars,   func = function() self:clear_repl_variables() end,  desc = "Clear REPL variables",     mode = { 'n' } },
+    { key = self.opts.keymaps.repl_save_session, func = function() self:save_repl_session() end,     desc = "Save REPL session",        mode = { 'n' } },
     -- Bar operations
-    { key = self.opts.keymaps.focus_bar,         func = function() self:focus_bar() end,            desc = "Focus bar",                mode = { 'n' } },
+    { key = self.opts.keymaps.focus_bar,         func = function() self:focus_bar() end,             desc = "Focus bar",                mode = { 'n' } },
+    { key = self.opts.keymaps.cell_next,         func = function() self:move_to_next_cell() end,     desc = "Move to next cell",        mode = { 'n' } },
+    { key = self.opts.keymaps.cell_prev,         func = function() self:move_to_previous_cell() end, desc = "Move to prev cell",        mode = { 'n' } },
+    { key = self.opts.keymaps.inspect_var,       func = function() self:inspect_variable() end,      desc = "Inspect the vartiables",   mode = { 'n' } },
+    { key = self.opts.keymaps.toggle_output,     func = function() self:toggle_output_capture() end, desc = "Toggle Output capturing",  mode = { 'n' } },
+    { key = self.opts.keymaps.clear_output,      func = function() self:clear_output() end,          desc = "Clear Output ",            mode = { 'n' } },
+    { key = self.opts.keymaps.smart_send,        func = function() self:smart_send_text() end,       desc = "Smart Send Output ",       mode = { 'n' } },
   }
 
   -- Set normal mode mappings
@@ -1686,7 +1692,7 @@ end
 function Neaterm:detect_repl_type()
   local ft = vim.bo.filetype
   local file_content = table.concat(api.nvim_buf_get_lines(0, 0, -1, false), "\n")
-  
+
   -- Detect Python virtual environment
   local venv = vim.fn.environ()['VIRTUAL_ENV']
   if venv and ft == 'python' then
@@ -1752,10 +1758,10 @@ end
 -- Smart send with auto-continuation
 function Neaterm:smart_send_text(text, opts)
   if not self.current_repl then return end
-  
+
   local ft = self.current_repl.filetype
   local config = self.repl_configs[ft]
-  
+
   -- Handle multi-line input for different REPLs
   local handlers = {
     python = function(txt)
@@ -1774,7 +1780,7 @@ function Neaterm:smart_send_text(text, opts)
 
   local handler = handlers[ft] or function(txt) return txt end
   local formatted_text = handler(text)
-  
+
   self:send_text(formatted_text, opts)
 end
 
@@ -1808,36 +1814,36 @@ end
 -- Add output capture and display
 function Neaterm:capture_output(timeout)
   if not self.current_repl then return end
-  
+
   timeout = timeout or 1000
   local output = ""
   local start_time = vim.loop.now()
-  
+
   -- Create temporary buffer for output
   local temp_buf = api.nvim_create_buf(false, true)
   local chan = self.terminals[self.current_repl.buf].job_id
-  
+
   -- Setup output callback
   local function on_output(_, data)
     if data then
       output = output .. table.concat(data, "\n")
     end
   end
-  
+
   -- Attach to terminal output
   vim.fn.jobstart(chan, {
     on_stdout = on_output,
     on_stderr = on_output
   })
-  
+
   -- Wait for output
   vim.wait(timeout, function()
     return vim.loop.now() - start_time >= timeout
   end)
-  
+
   -- Clean up
   api.nvim_buf_delete(temp_buf, { force = true })
-  
+
   return output
 end
 
@@ -1847,23 +1853,23 @@ function Neaterm:inspect_variable(var_name)
     vim.notify("No active REPL found", vim.log.levels.WARN)
     return
   end
-  
+
   local config = self.repl_configs[self.current_repl.filetype]
   if not config or not config.inspect_variable_cmd then
     vim.notify("Variable inspection not configured for this REPL", vim.log.levels.WARN)
     return
   end
-  
+
   -- Store current output capture state
   local was_capturing = self.output_capture_enabled
   if was_capturing then
     self:stop_output_capture()
   end
-  
+
   -- Send inspection command
   local cmd = string.format(config.inspect_variable_cmd, var_name)
   self:send_text(cmd, { add_to_history = false })
-  
+
   -- Capture and display output
   vim.defer_fn(function()
     local output = self:capture_output(self.opts.output.capture_timeout)
@@ -1872,10 +1878,10 @@ function Neaterm:inspect_variable(var_name)
       local lines = vim.split(output, "\n")
       local buf = api.nvim_create_buf(false, true)
       api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-      
+
       local width = math.min(vim.fn.strdisplaywidth(lines[1] or ""), self.opts.output.float.width)
       local height = math.min(#lines, self.opts.output.float.height)
-      
+
       local opts = {
         relative = 'cursor',
         width = width,
@@ -1886,20 +1892,20 @@ function Neaterm:inspect_variable(var_name)
         border = self.opts.output.float.border,
         title = " " .. var_name .. " ",
       }
-      
+
       local win = api.nvim_open_win(buf, false, opts)
-      
+
       -- Set buffer options
       api.nvim_buf_set_option(buf, 'modifiable', false)
       api.nvim_buf_set_option(buf, 'bufhidden', 'wipe')
-      
+
       -- Auto-close preview
       vim.defer_fn(function()
         if api.nvim_win_is_valid(win) then
           api.nvim_win_close(win, true)
         end
       end, self.opts.output.preview_time)
-      
+
       -- Restore output capture if it was enabled
       if was_capturing then
         self:start_output_capture()
@@ -1911,7 +1917,7 @@ end
 -- Add session management
 function Neaterm:save_session()
   if not self.opts.session.auto_save then return end
-  
+
   local session = {
     terminals = {},
     current_terminal = self.current_terminal,
@@ -1924,7 +1930,7 @@ function Neaterm:save_session()
     history = self.opts.session.include_history and self.history or nil,
     variables = self.opts.session.include_variables and self.variables or nil
   }
-  
+
   -- Save terminal states
   for buf, term in pairs(self.terminals) do
     if api.nvim_buf_is_valid(buf) then
@@ -1933,7 +1939,7 @@ function Neaterm:save_session()
         type = term.type,
         cwd = vim.fn.getcwd(-1, buf)
       }
-      
+
       -- Save window layout if enabled
       if self.opts.session.include_layout then
         local win = vim.fn.bufwinid(buf)
@@ -1947,16 +1953,16 @@ function Neaterm:save_session()
       end
     end
   end
-  
+
   -- Ensure session directory exists
   vim.fn.mkdir(self.opts.session.save_path, 'p')
-  
+
   -- Save to file
   local session_file = string.format("%s/session_%s.json",
     self.opts.session.save_path,
     os.date("%Y%m%d_%H%M%S")
   )
-  
+
   local ok, encoded = pcall(vim.json.encode, session)
   if ok then
     local file = io.open(session_file, 'w')
@@ -1970,25 +1976,25 @@ end
 
 function Neaterm:restore_session()
   if not self.opts.session.auto_restore then return end
-  
+
   -- Find latest session file
   local session_pattern = self.opts.session.save_path .. "/session_*.json"
   local files = vim.fn.glob(session_pattern, false, true)
   if #files == 0 then return end
-  
+
   local latest_file = files[#files]
   local file = io.open(latest_file, 'r')
   if not file then return end
-  
+
   local content = file:read("*all")
   file:close()
-  
+
   local ok, session = pcall(vim.json.decode, content)
   if not ok then
     vim.notify("Failed to restore session: Invalid session file", vim.log.levels.ERROR)
     return
   end
-  
+
   -- Restore terminals
   for _, term in pairs(session.terminals) do
     local buf = self:create_terminal({
@@ -1996,7 +2002,7 @@ function Neaterm:restore_session()
       type = term.type,
       cwd = term.cwd
     })
-    
+
     -- Restore layout if enabled
     if self.opts.session.include_layout and session.layout[buf] then
       local layout = session.layout[buf]
@@ -2008,64 +2014,37 @@ function Neaterm:restore_session()
       end
     end
   end
-  
+
   -- Restore REPL if needed
   if session.current_repl then
     self:start_repl(session.current_repl)
   end
-  
+
   -- Restore history and variables if included
   if session.history and self.opts.session.include_history then
     self.history = session.history
   end
-  
+
   if session.variables and self.opts.session.include_variables then
     self.variables = session.variables
   end
-  
+
   vim.notify("Terminal session restored from: " .. latest_file, vim.log.levels.INFO)
 end
 
 -- Add these to the setup_keymaps function
-function Neaterm:setup_additional_keymaps()
-  local opts = { noremap = true, silent = true }
-  
-  -- Cell navigation and execution
-  vim.keymap.set('n', self.opts.keymaps.cell_next or '[c', function()
-    -- Navigate to next cell
-  end, opts)
-  
-  vim.keymap.set('n', self.opts.keymaps.cell_prev or ']c', function()
-    -- Navigate to previous cell
-  end, opts)
-  
-  vim.keymap.set('n', self.opts.keymaps.cell_execute or '<leader>x', function()
-    self:send_cell()
-  end, opts)
-  
-  -- Smart block execution
-  vim.keymap.set('n', self.opts.keymaps.smart_send or '<leader>sb', function()
-    local block = self:detect_code_block()
-    self:smart_send_text(block, { add_to_history = true })
-  end, opts)
-  
-  -- Variable inspection
-  vim.keymap.set('n', self.opts.keymaps.inspect_var or '<leader>sv', function()
-    local word = vim.fn.expand('<cword>')
-    self:inspect_variable(word)
-  end, opts)
-end
+
 
 -- Cell navigation methods
 function Neaterm:move_to_next_cell()
   local cur_line = api.nvim_win_get_cursor(0)[1]
   local lines = api.nvim_buf_get_lines(0, cur_line, -1, false)
-  
+
   for i, line in ipairs(lines) do
     for _, pattern in ipairs(self.opts.cell.markers) do
       if line:match(pattern) then
         -- Move to the found cell marker
-        api.nvim_win_set_cursor(0, {cur_line + i, 0})
+        api.nvim_win_set_cursor(0, { cur_line + i, 0 })
         if self.opts.cell.auto_focus then
           vim.cmd('normal! zz') -- Center the view
         end
@@ -2079,12 +2058,12 @@ end
 function Neaterm:move_to_previous_cell()
   local cur_line = api.nvim_win_get_cursor(0)[1]
   local lines = api.nvim_buf_get_lines(0, 0, cur_line - 1, false)
-  
+
   for i = #lines, 1, -1 do
     for _, pattern in ipairs(self.opts.cell.markers) do
       if lines[i]:match(pattern) then
         -- Move to the found cell marker
-        api.nvim_win_set_cursor(0, {i, 0})
+        api.nvim_win_set_cursor(0, { i, 0 })
         if self.opts.cell.auto_focus then
           vim.cmd('normal! zz') -- Center the view
         end
@@ -2111,7 +2090,7 @@ end
 
 function Neaterm:start_output_capture()
   if not self.current_repl then return end
-  
+
   -- Create output buffer if it doesn't exist
   if not self.output_buf or not api.nvim_buf_is_valid(self.output_buf) then
     self.output_buf = api.nvim_create_buf(false, true)
@@ -2132,7 +2111,7 @@ function Neaterm:start_output_capture()
   -- Setup output capture
   local chan = self.terminals[self.current_repl.buf].job_id
   self.output_lines = {}
-  
+
   self.output_callback = function(_, data)
     if data then
       -- Add new lines to output buffer
@@ -2142,11 +2121,11 @@ function Neaterm:start_output_capture()
         end
         table.insert(self.output_lines, line)
       end
-      
+
       -- Update output buffer
       if api.nvim_buf_is_valid(self.output_buf) then
         api.nvim_buf_set_lines(self.output_buf, 0, -1, false, self.output_lines)
-        
+
         -- Apply syntax highlighting if enabled
         if self.opts.output.highlight then
           vim.cmd('syntax enable')
@@ -2168,12 +2147,12 @@ function Neaterm:stop_output_capture()
   if self.output_win and api.nvim_win_is_valid(self.output_win) then
     api.nvim_win_close(self.output_win, true)
   end
-  
+
   if self.output_callback then
     -- Detach output callback
     self.output_callback = nil
   end
-  
+
   self.output_capture_enabled = false
   vim.notify("Output capture stopped", vim.log.levels.INFO)
 end
