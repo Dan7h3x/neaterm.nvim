@@ -445,35 +445,87 @@ function Neaterm:show_repl_menu()
     vim.notify("fzf-lua is required for REPL menu", vim.log.levels.ERROR)
     return
   end
-  
-  local repl_configs = {}
-  for name, config in pairs(self.opts.repls or {}) do
-    table.insert(repl_configs, {
+
+  -- Define available REPLs with their configurations
+  local repl_configs = {
+    python = {
+      cmd = "python",
+      filetype = "python",
+      type = "repl",
+    },
+    node = {
+      cmd = "node",
+      filetype = "javascript",
+      type = "repl",
+    },
+    lua = {
+      cmd = "lua",
+      filetype = "lua",
+      type = "repl",
+    },
+    R = {
+      cmd = "R",
+      filetype = "r",
+      type = "repl",
+    },
+    julia = {
+      cmd = "julia",
+      filetype = "julia",
+      type = "repl",
+    },
+    -- Add more REPL configurations as needed
+  }
+
+  -- Merge with user-defined REPLs
+  if self.opts.repls then
+    for name, config in pairs(self.opts.repls) do
+      repl_configs[name] = vim.tbl_extend('force', repl_configs[name] or {}, config)
+    end
+  end
+
+  -- Convert to list format for fzf
+  local repl_list = {}
+  for name, config in pairs(repl_configs) do
+    table.insert(repl_list, {
       name = name,
-      config = config
+      config = config,
+      display = string.format("%s (%s)", name:upper(), config.cmd or "")
     })
   end
-  
+
+  -- Sort REPLs alphabetically
+  table.sort(repl_list, function(a, b) return a.name < b.name end)
+
   require('fzf-lua').fzf_exec(
-    vim.tbl_map(function(item) return item.name end, repl_configs),
+    vim.tbl_map(function(item) return item.display end, repl_list),
     {
       prompt = "Select REPL > ",
       actions = {
         ['default'] = function(selected)
           if selected and selected[1] then
-            for _, config in ipairs(repl_configs) do
-              if config.name == selected[1] then
-                self:start_repl(config.config)
+            -- Find the selected REPL config
+            for _, repl in ipairs(repl_list) do
+              if repl.display == selected[1] then
+                self:start_repl(repl.config)
                 break
               end
             end
           end
         end
+      },
+      winopts = {
+        height = 0.4,
+        width = 0.5,
+        border = self.opts.border or 'rounded',
+        preview = {
+          hidden = 'hidden'
+        }
       }
     }
   )
 end
 
+-- Helper function to start REPL
 function Neaterm:start_repl(repl_config)
   -- Close existing REPL if any
   if self.current_repl then
@@ -489,9 +541,14 @@ end
 
 -- Helper method to create new REPL
 function Neaterm:_create_new_repl(repl_config)
+  if not repl_config.cmd then
+    vim.notify("Invalid REPL configuration: missing command", vim.log.levels.ERROR)
+    return
+  end
+
   local buf = self:create_terminal({
     cmd = repl_config.cmd,
-    type = repl_config.type,
+    type = repl_config.type or 'float',
   })
 
   if not buf then
@@ -502,20 +559,50 @@ function Neaterm:_create_new_repl(repl_config)
   self.current_repl = {
     buf = buf,
     filetype = repl_config.filetype,
-    config = self.repl_configs[repl_config.filetype],
-    type = repl_config.type
+    config = repl_config,
+    type = repl_config.type or 'repl'
   }
 
   -- Execute startup commands after a delay
-  if self.current_repl.config.startup_cmds then
+  if repl_config.startup_cmds then
     vim.defer_fn(function()
       if self.current_repl and self.terminals[buf] then
-        for _, cmd in ipairs(self.current_repl.config.startup_cmds) do
-          self:send_text(cmd)
+        for _, cmd in ipairs(repl_config.startup_cmds) do
+          self:send_text(cmd, { add_to_history = false })
         end
       end
     end, 500)
   end
+
+  -- Notify user
+  vim.notify(
+    string.format("Started %s REPL", repl_config.filetype:upper()),
+    vim.log.levels.INFO
+  )
+end
+
+-- Helper function to safely close REPL
+function Neaterm:safe_close_repl()
+  if not self.current_repl then return end
+
+  local buf = self.current_repl.buf
+  if buf and vim.api.nvim_buf_is_valid(buf) then
+    -- Execute cleanup commands if defined
+    if self.current_repl.config.cleanup_cmds then
+      for _, cmd in ipairs(self.current_repl.config.cleanup_cmds) do
+        self:send_text(cmd, { add_to_history = false })
+      end
+    end
+
+    -- Wait briefly for cleanup commands to execute
+    vim.defer_fn(function()
+      if vim.api.nvim_buf_is_valid(buf) then
+        vim.api.nvim_buf_delete(buf, { force = true })
+      end
+    end, 100)
+  end
+
+  self.current_repl = nil
 end
 
 -- History Management Methods
