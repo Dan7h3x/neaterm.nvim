@@ -72,6 +72,73 @@ function Neaterm:setup_keymaps()
       desc = "Close current terminal",
       mode = { 'n', 't' }
     },
+    -- Navigation and window management
+    {
+      key = self.opts.keymaps.next,
+      func = function() self:next_terminal() end,
+      desc = "Next terminal",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.prev,
+      func = function() self:prev_terminal() end,
+      desc = "Previous terminal",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.move_up,
+      func = function() self:move_terminal('up') end,
+      desc = "Move terminal up",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.move_down,
+      func = function() self:move_terminal('down') end,
+      desc = "Move terminal down",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.move_left,
+      func = function() self:move_terminal('left') end,
+      desc = "Move terminal left",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.move_right,
+      func = function() self:move_terminal('right') end,
+      desc = "Move terminal right",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.resize_up,
+      func = function() self:resize_terminal('up') end,
+      desc = "Resize terminal up",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.resize_down,
+      func = function() self:resize_terminal('down') end,
+      desc = "Resize terminal down",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.resize_left,
+      func = function() self:resize_terminal('left') end,
+      desc = "Resize terminal left",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.resize_right,
+      func = function() self:resize_terminal('right') end,
+      desc = "Resize terminal right",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.focus_bar,
+      func = function() self:focus_terminal_bar() end,
+      desc = "Focus terminal bar",
+      mode = { 'n' }
+    },
     -- REPL operations
     {
       key = self.opts.keymaps.repl_toggle,
@@ -92,9 +159,77 @@ function Neaterm:setup_keymaps()
       mode = { 'n' }
     },
     {
-      key = self.opts.keymaps.show_variables,
+      key = self.opts.keymaps.repl_send_block,
+      func = function() self:send_block_to_repl() end,
+      desc = "Send block to REPL",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.repl_clear,
+      func = function() self:clear_repl() end,
+      desc = "Clear REPL",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.repl_history,
+      func = function() self:show_repl_history() end,
+      desc = "Show REPL history",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.repl_variables,
       func = function() self:show_variables() end,
-      desc = "Show REPL Variables",
+      desc = "Show REPL variables",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.repl_restart,
+      func = function() self:restart_repl() end,
+      desc = "Restart REPL",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.repl_repeat_last,
+      func = function() self:repeat_last_command() end,
+      desc = "Repeat last REPL command",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.repl_clear_vars,
+      func = function() self:clear_repl_variables() end,
+      desc = "Clear REPL variables",
+      mode = { 'n' }
+    },
+    -- Cell navigation and execution
+    {
+      key = self.opts.keymaps.cell_next,
+      func = function() self:goto_next_cell() end,
+      desc = "Go to next cell",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.cell_prev,
+      func = function() self:goto_prev_cell() end,
+      desc = "Go to previous cell",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.cell_execute,
+      func = function() self:execute_cell() end,
+      desc = "Execute cell",
+      mode = { 'n' }
+    },
+    -- Smart send operations
+    {
+      key = self.opts.keymaps.smart_send,
+      func = function() self:smart_send() end,
+      desc = "Smart send to REPL",
+      mode = { 'n' }
+    },
+    {
+      key = self.opts.keymaps.auto_smart_send,
+      func = function() self:toggle_auto_smart_send() end,
+      desc = "Toggle auto smart send",
       mode = { 'n' }
     }
   }
@@ -113,11 +248,18 @@ function Neaterm:setup_keymaps()
     end
   end
 
-  -- Set visual mode mapping for REPL selection only if the key is defined
+  -- Set visual mode mappings
   if self.opts.keymaps.repl_send_selection then
     vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
       self:send_selection_to_repl()
-    end, opts)
+    end, vim.tbl_extend('force', opts, { desc = "Send selection to REPL" }))
+  end
+
+  -- Set smart send for visual mode
+  if self.opts.keymaps.smart_send then
+    vim.keymap.set('v', self.opts.keymaps.smart_send, function()
+      self:smart_send()
+    end, vim.tbl_extend('force', opts, { desc = "Smart send selection to REPL" }))
   end
 end
 
@@ -299,20 +441,31 @@ end
 
 -- REPL Management Methods
 function Neaterm:show_repl_menu()
-  local current_ft = vim.bo.filetype
-  local items = self:get_repl_menu_items(current_ft)
-
+  if not pcall(require, 'fzf-lua') then
+    vim.notify("fzf-lua is required for REPL menu", vim.log.levels.ERROR)
+    return
+  end
+  
+  local repl_configs = {}
+  for name, config in pairs(self.opts.repls or {}) do
+    table.insert(repl_configs, {
+      name = name,
+      config = config
+    })
+  end
+  
   require('fzf-lua').fzf_exec(
-    vim.tbl_map(function(item) return item.name end, items),
+    vim.tbl_map(function(item) return item.name end, repl_configs),
     {
       prompt = "Select REPL > ",
       actions = {
-        ["default"] = function(selected)
-          local selection = selected[1]
-          for _, item in ipairs(items) do
-            if item.name == selection then
-              self:start_repl(item)
-              break
+        ['default'] = function(selected)
+          if selected and selected[1] then
+            for _, config in ipairs(repl_configs) do
+              if config.name == selected[1] then
+                self:start_repl(config.config)
+                break
+              end
             end
           end
         end
@@ -1022,7 +1175,7 @@ end
 function Neaterm:next_terminal()
   local terminals = vim.tbl_keys(self.terminals)
   if #terminals == 0 then return end
-
+  
   local current_index = 1
   for i, buf in ipairs(terminals) do
     if buf == self.current_terminal then
@@ -1030,7 +1183,7 @@ function Neaterm:next_terminal()
       break
     end
   end
-
+  
   local next_index = current_index % #terminals + 1
   self:show_terminal(terminals[next_index])
 end
@@ -1038,7 +1191,7 @@ end
 function Neaterm:prev_terminal()
   local terminals = vim.tbl_keys(self.terminals)
   if #terminals == 0 then return end
-
+  
   local current_index = 1
   for i, buf in ipairs(terminals) do
     if buf == self.current_terminal then
@@ -1046,62 +1199,45 @@ function Neaterm:prev_terminal()
       break
     end
   end
-
+  
   local prev_index = (current_index - 2) % #terminals + 1
   self:show_terminal(terminals[prev_index])
 end
 
 -- Add movement and resize methods
 function Neaterm:move_terminal(direction)
-  local term = self.terminals[self.current_terminal]
-  if not term or not term.window then return end
-
-  local win = term.window
-  local config = api.nvim_win_get_config(win)
-
-  if config.relative == 'editor' then -- Floating window
-    local changes = {
-      up = { row = -self.opts.move_amount },
-      down = { row = self.opts.move_amount },
-      left = { col = -self.opts.move_amount },
-      right = { col = self.opts.move_amount }
-    }
-
-    self:update_float_position(win, changes[direction] or {})
-  else -- Regular window
-    local directions = {
-      up = 'K',
-      down = 'J',
-      left = 'H',
-      right = 'L'
-    }
-    vim.cmd('wincmd ' .. directions[direction])
+  if not self.current_terminal then return end
+  
+  local win = vim.fn.win_findbuf(self.current_terminal)[1]
+  if not win then return end
+  
+  local movements = {
+    up = 'K',
+    down = 'J',
+    left = 'H',
+    right = 'L'
+  }
+  
+  if movements[direction] then
+    vim.cmd('wincmd ' .. movements[direction])
   end
 end
 
 function Neaterm:resize_terminal(direction)
-  local term = self.terminals[self.current_terminal]
-  if not term or not term.window then return end
-
-  local win = term.window
-  local config = api.nvim_win_get_config(win)
-
-  if config.relative == 'editor' then -- Floating window
-    local changes = {
-      up = { height = -self.opts.resize_amount },
-      down = { height = self.opts.resize_amount },
-      left = { width = -self.opts.resize_amount },
-      right = { width = self.opts.resize_amount }
-    }
-
-    self:update_float_position(win, changes[direction] or {})
-  else -- Regular window
-    local cmd = {
-      up = 'resize -' .. self.opts.resize_amount,
-      down = 'resize +' .. self.opts.resize_amount,
-      left = 'vertical resize -' .. self.opts.resize_amount,
-      right = 'vertical resize +' .. self.opts.resize_amount
-    }
+  if not self.current_terminal then return end
+  
+  local win = vim.fn.win_findbuf(self.current_terminal)[1]
+  if not win then return end
+  
+  local amount = self.opts.resize_amount or 2
+  local cmd = {
+    up = string.format('resize -%d', amount),
+    down = string.format('resize +%d', amount),
+    left = string.format('vertical resize -%d', amount),
+    right = string.format('vertical resize +%d', amount)
+  }
+  
+  if cmd[direction] then
     vim.cmd(cmd[direction])
   end
 end
@@ -1203,38 +1339,25 @@ end
 
 -- Clear REPL
 function Neaterm:clear_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  self:send_text("\x0c") -- Send Ctrl-L to clear screen
+  if not self:ensure_repl_exists() then return end
+  self:send_text("\x0c", { add_to_history = false }) -- Send Ctrl-L
 end
 
 -- Restart REPL
 function Neaterm:restart_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local current_config = {
-    cmd = self.current_repl.config.cmd,
-    type = self.current_repl.type,
-    filetype = self.current_repl.filetype
-  }
-
+  if not self:ensure_repl_exists() then return end
+  
+  local config = self.current_repl.config
   self:safe_close_repl()
-
   vim.defer_fn(function()
-    self:start_repl(current_config)
+    self:start_repl(config)
   end, 100)
 end
 
 -- Focus terminal bar
 function Neaterm:focus_bar()
-  if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
-    api.nvim_set_current_win(self.bar_win)
+  if self.bar_win and vim.api.nvim_win_is_valid(self.bar_win) then
+    vim.api.nvim_set_current_win(self.bar_win)
   end
 end
 
@@ -1503,45 +1626,29 @@ end
 
 -- Add method to execute last command
 function Neaterm:repeat_last_command()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
+  if not self:ensure_repl_exists() then return end
+  
+  local history = self.history[self.current_repl.filetype]
+  if history and history[1] then
+    self:send_text(history[1], { add_to_history = false })
+  else
+    vim.notify("No command history available", vim.log.levels.WARN)
   end
-
-  local ft = self.current_repl.filetype
-  if not self.history[ft] or #self.history[ft] == 0 then
-    vim.notify("No command history for current REPL", vim.log.levels.INFO)
-    return
-  end
-
-  self:send_text(self.history[ft][1])
-  vim.notify("Repeated last command", vim.log.levels.INFO)
 end
 
 -- Add method to clear REPL variables
 function Neaterm:clear_repl_variables()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = self.repl_configs[self.current_repl.filetype]
-  if config.clear_variables_cmd then
-    self:send_text(config.clear_variables_cmd)
-    vim.notify("Cleared REPL variables", vim.log.levels.INFO)
-  else
-    vim.notify("Clear variables command not configured for this REPL", vim.log.levels.WARN)
-  end
+  if not self:ensure_repl_exists() then return end
+  
+  self.variables[self.current_repl.filetype] = {}
+  vim.notify("REPL variables cleared", vim.log.levels.INFO)
 end
 
 -- Add method to save REPL session
 function Neaterm:save_repl_session()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
-
-  local config = self.repl_configs[self.current_repl.filetype]
+  if not self:ensure_repl_exists() then return end
+  
+  local config = self.current_repl.config
   if config.save_session_cmd then
     local session_file = string.format("%s/neaterm_%s_session_%s.%s",
       vim.fn.stdpath('data'),
@@ -1908,40 +2015,32 @@ end
 
 -- Cell navigation methods
 function Neaterm:move_to_next_cell()
-  local cur_line = api.nvim_win_get_cursor(0)[1]
-  local lines = api.nvim_buf_get_lines(0, cur_line, -1, false)
-
+  local pattern = self.opts.cell_delimiter or "^# %%"
+  local current_line = vim.api.nvim_win_get_cursor(0)[1]
+  local lines = vim.api.nvim_buf_get_lines(0, current_line, -1, false)
+  
   for i, line in ipairs(lines) do
-    for _, pattern in ipairs(self.opts.cell.markers) do
-      if line:match(pattern) then
-        -- Move to the found cell marker
-        api.nvim_win_set_cursor(0, { cur_line + i, 0 })
-        if self.opts.cell.auto_focus then
-          vim.cmd('normal! zz') -- Center the view
-        end
-        return
-      end
+    if line:match(pattern) then
+      vim.api.nvim_win_set_cursor(0, {current_line + i, 0})
+      return
     end
   end
+  
   vim.notify("No next cell found", vim.log.levels.INFO)
 end
 
 function Neaterm:move_to_previous_cell()
-  local cur_line = api.nvim_win_get_cursor(0)[1]
-  local lines = api.nvim_buf_get_lines(0, 0, cur_line - 1, false)
-
+  local pattern = self.opts.cell_delimiter or "^# %%"
+  local current_line = vim.api.nvim_win_get_cursor(0)[1] - 1
+  local lines = vim.api.nvim_buf_get_lines(0, 0, current_line, false)
+  
   for i = #lines, 1, -1 do
-    for _, pattern in ipairs(self.opts.cell.markers) do
-      if lines[i]:match(pattern) then
-        -- Move to the found cell marker
-        api.nvim_win_set_cursor(0, { i, 0 })
-        if self.opts.cell.auto_focus then
-          vim.cmd('normal! zz') -- Center the view
-        end
-        return
-      end
+    if lines[i]:match(pattern) then
+      vim.api.nvim_win_set_cursor(0, {i, 0})
+      return
     end
   end
+  
   vim.notify("No previous cell found", vim.log.levels.INFO)
 end
 
