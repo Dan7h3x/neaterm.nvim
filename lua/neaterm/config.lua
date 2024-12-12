@@ -2,7 +2,7 @@ local M = {}
 
 ---@class NeatermConfig
 local default_opts = {
-  -- Terminal settings
+  -- terminal settings
   shell = vim.o.shell,
   float_width = 0.5,
   float_height = 0.4,
@@ -10,14 +10,14 @@ local default_opts = {
   resize_amount = 2,
   border = 'rounded',
 
-  -- Appearance
+  -- appearance
   highlights = {
-    normal = 'Normal',
-    border = 'FloatBorder',
-    title = 'Title',
+    normal = 'normal',
+    border = 'floatborder',
+    title = 'title',
   },
 
-  -- Window management
+  -- window management
   min_width = 20,
   min_height = 3,
 
@@ -25,14 +25,14 @@ local default_opts = {
   -- custom terminals
   terminals = {
     ranger = {
-      name = "Ranger",
+      name = "ranger",
       cmd = "ranger",
       type = "float",
       float_width = 0.8,
       float_height = 0.8,
       keymaps = {
         quit = "q",
-        select = "<CR>",
+        select = "<cr>",
         preview = "p",
       },
       on_exit = function(selected_file)
@@ -42,7 +42,7 @@ local default_opts = {
       end
     },
     lazygit = {
-      name = "LazyGit",
+      name = "lazygit",
       cmd = "lazygit",
       type = "float",
       float_width = 0.9,
@@ -50,11 +50,11 @@ local default_opts = {
       keymaps = {
         quit = "q",
         commit = "c",
-        push = "P",
+        push = "p",
       },
     },
     btop = {
-      name = "Btop",
+      name = "btop",
       cmd = "btop",
       type = "float",
       float_width = 0.8,
@@ -67,34 +67,35 @@ local default_opts = {
 
   },
 
-  -- Default keymaps
+  -- default keymaps
   use_default_keymaps = true,
   keymaps = {
-    toggle = '<A-t>',
-    new_vertical = '<C-\\>',
-    new_horizontal = '<C-.>',
-    new_float = '<C-A-t>',
-    close = '<A-d>',
-    next = '<C-PageDown>',
-    prev = '<C-PageUp>',
-    move_up = '<C-A-Up>',
-    move_down = '<C-A-Down>',
-    move_left = '<C-A-Left>',
-    move_right = '<C-A-Right>',
-    resize_up = '<C-S-Up>',
-    resize_down = '<C-S-Down>',
-    resize_left = '<C-S-Left>',
-    resize_right = '<C-S-Right>',
-    focus_bar = '<C-A-b>',
+    toggle = '<a-t>',
+    new_vertical = '<c-\\>',
+    new_horizontal = '<c-.>',
+    new_float = '<c-a-t>',
+    close = '<a-d>',
+    next = '<c-pagedown>',
+    prev = '<c-pageup>',
+    move_up = '<c-a-up>',
+    move_down = '<c-a-down>',
+    move_left = '<c-a-left>',
+    move_right = '<c-a-right>',
+    resize_up = '<c-s-up>',
+    resize_down = '<c-s-down>',
+    resize_left = '<c-s-left>',
+    resize_right = '<c-s-right>',
+    focus_bar = '<c-a-b>',
     repl_toggle = '<leader>rt',
     repl_send_line = '<leader>rl',
     repl_send_selection = '<leader>rs',
     repl_send_buffer = '<leader>rb',
+    repl_send_block = '<leader>rB',
     repl_clear = '<leader>rc',
     repl_history = '<leader>rh',
     repl_variables = '<leader>rv',
-    show_variables = '<leader>rV',
-    repl_restart = '<leader>rR',
+    show_variables = '<leader>rv',
+    repl_restart = '<leader>rr',
     repl_repeat_last = '<leader>r.',
     repl_clear_vars = '<leader>rx',
     cell_next = ']c',
@@ -102,10 +103,9 @@ local default_opts = {
     cell_execute = '<leader>x',
     smart_send = '<leader>sb',
     auto_smart_send = '<leader>tv',
-    repl_send_block = '<leader>ts',
   },
 
-  -- REPL configurations
+  -- repl configurations
   repl = {
     float_width = 0.6,
     float_height = 0.4,
@@ -115,15 +115,15 @@ local default_opts = {
     update_interval = 5000,
   },
 
-  -- REPL language configurations
+  -- repl language configurations
   repl_configs = {
     python = {
-      name = "Python (IPython)",
-      cmd = "ipython --no-autoindent --colors='Linux'",
+      name = "python (ipython)",
+      cmd = "ipython --no-autoindent --colors='linux'",
       default_type = "float",
       startup_cmds = {
         -- "import sys",
-        -- "sys.ps1 = 'In []: '",
+        -- "sys.ps1 = 'in []: '",
         -- "sys.ps2 = '   ....: '",
       },
       get_variables_cmd = "whos",
@@ -146,19 +146,19 @@ local default_opts = {
       debugger_integration = true,
     },
     r = {
-      name = "R (Radian)",
+      name = "r (radian)",
       cmd = "radian",
       default_type = "vertical",
       startup_cmds = {
         -- "options(width = 80)",
-        -- "options(prompt = 'R> ')",
+        -- "options(prompt = 'r> ')",
       },
       get_variables_cmd = "ls.str()",
       inspect_variable_cmd = "str(",
       exit_cmd = "q(save='no')",
       clear_variables_cmd = "rm(list=ls())",
       save_session_cmd = "save.image('%s')",
-      session_extension = "RData",
+      session_extension = "rdata",
       pre_clear_cmds = {},
       post_clear_cmds = {},
       plot_handling = true,
@@ -166,7 +166,7 @@ local default_opts = {
       package_management = true,
     },
     lua = {
-      name = "Lua",
+      name = "lua",
       cmd = "lua",
       default_type = "float",
       exit_cmd = "os.exit()",
@@ -177,12 +177,12 @@ local default_opts = {
       post_clear_cmds = {},
     },
     node = {
-      name = "Node.js",
+      name = "node.js",
       cmd = "node",
       default_type = "float",
-      get_variables_cmd = "Object.keys(global)",
+      get_variables_cmd = "object.keys(global)",
       exit_cmd = ".exit",
-      clear_variables_cmd = "global = {}; Object.keys(global);",
+      clear_variables_cmd = "global = {}; object.keys(global);",
       save_session_cmd = "save_session('%s')",
       session_extension = "json",
       pre_clear_cmds = {},
@@ -192,17 +192,17 @@ local default_opts = {
       npm_integration = true,
     },
     sh = {
-      name = "Shell",
+      name = "shell",
       cmd = vim.o.shell,
       default_type = "float",
       startup_cmds = {
-        "PS1='$ '",
-        "TERM=xterm-256color",
+        "ps1='$ '",
+        "term=xterm-256color",
       },
       get_variables_cmd = "set",
       inspect_variable_cmd = "echo $",
       exit_cmd = "exit",
-      clear_variables_cmd = "unset -f $(compgen -A function)",
+      clear_variables_cmd = "unset -f $(compgen -a function)",
       save_session_cmd = "save_session('%s')",
       session_extension = "sh",
       pre_clear_cmds = {},
@@ -210,7 +210,7 @@ local default_opts = {
     },
   },
 
-  -- Terminal features
+  -- terminal features
   features = {
     auto_insert = true,
     auto_close = true,
@@ -226,7 +226,7 @@ local default_opts = {
     session_management = true,
   },
 
-  -- Cell configuration
+  -- cell configuration
   cell = {
     markers = {
       "^%s*#%%",
@@ -240,7 +240,7 @@ local default_opts = {
     show_cell_numbers = true,
   },
 
-  -- Output capture configuration
+  -- output capture configuration
   output = {
     capture_timeout = 1000,
     max_lines = 1000,
@@ -250,11 +250,11 @@ local default_opts = {
       border = "rounded",
       width = 80,
       height = 20,
-      title = "Output",
+      title = "output",
     },
   },
 
-  -- Session management
+  -- session management
   session = {
     auto_save = true,
     auto_restore = true,
@@ -264,7 +264,7 @@ local default_opts = {
     include_variables = true,
   },
 
-  -- Terminal enhancements
+  -- terminal enhancements
   terminal = {
     shell_integration = {
       enabled = true,
