@@ -127,16 +127,16 @@ function Neaterm:setup_keymaps()
     { key = self.opts.keymaps.smart_send,        func = function() self:smart_send_text() end,       desc = "Smart Send Output ",       mode = { 'n' } },
 
     -- Add new keymap for show_variables
-    { 
-      key = self.opts.keymaps.show_variables or '<leader>rv',
+    {
+      key = self.opts.keymaps.show_variables,
       func = function() self:show_variables() end,
       desc = "Show REPL Variables",
       mode = { 'n' }
     },
 
     -- Enhanced REPL operations with terminal features
-    { 
-      key = self.opts.keymaps.repl_send_block or '<leader>rb',
+    {
+      key = self.opts.keymaps.repl_send_block,
       func = function()
         local block = self:get_code_block()
         self:send_text(block, { add_to_history = true })
@@ -144,10 +144,10 @@ function Neaterm:setup_keymaps()
       desc = "Send code block to REPL",
       mode = { 'n' }
     },
-    
+
     -- Smart send based on context
     {
-      key = self.opts.keymaps.smart_send or '<leader>rs',
+      key = self.opts.keymaps.auto_smart_send,
       func = function()
         local mode = api.nvim_get_mode().mode
         if mode == 'v' or mode == 'V' then
@@ -807,25 +807,47 @@ function Neaterm:update_variables()
 end
 
 -- Add this to store variables
-function Neaterm:capture_variables_async()
-  if not self.current_repl then return {} end
+function Neaterm:capture_variables_async(callback)
+  if not self.current_repl then
+    callback({})
+    return
+  end
 
   local config = self.repl_configs[self.current_repl.filetype]
-  if not config or not config.get_variables_cmd then return {} end
+  if not config or not config.get_variables_cmd then
+    callback({})
+    return
+  end
 
-  local temp_buf = api.nvim_create_buf(false, true)
-  local output = ""
+  -- Store current buffer position
+  local current_pos = api.nvim_win_get_cursor(0)
 
-  self:send_text(config.get_variables_cmd)
+  -- Send command to get variables
+  self:send_text(config.get_variables_cmd, { add_to_history = false })
 
+  -- Wait briefly for output
   vim.defer_fn(function()
     local lines = api.nvim_buf_get_lines(self.current_repl.buf, -20, -1, false)
-    output = table.concat(lines, "\n")
+    local output = table.concat(lines, "\n")
 
-    local vars = config.parse_output and config.parse_output(output) or {}
-    pcall(api.nvim_buf_delete, temp_buf, { force = true })
+    -- Parse variables based on REPL type
+    local vars = {}
+    if config.parse_variables then
+      vars = config.parse_variables(output)
+    else
+      -- Default parsing (basic key-value format)
+      for line in output:gmatch("[^\r\n]+") do
+        local name, value = line:match("^%s*([%w_]+)%s*=%s*(.+)$")
+        if name and value then
+          table.insert(vars, { name = name, value = value })
+        end
+      end
+    end
 
-    return vars
+    -- Restore cursor position
+    api.nvim_win_set_cursor(0, current_pos)
+
+    callback(vars)
   end, 100)
 end
 
@@ -859,19 +881,27 @@ function Neaterm:show_variables()
     return
   end
 
-  local vars = self:capture_variables_async()
+  -- Create buffer for variables
   local buf = api.nvim_create_buf(false, true)
-  local lines = { "# Active Variables", "" }
+  api.nvim_buf_set_option(buf, 'modifiable', false)
+  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(buf, 'filetype', 'markdown')
+  api.nvim_buf_set_name(buf, 'REPL Variables')
 
-  for _, var in ipairs(vars) do
-    table.insert(lines, string.format("- **%s**: %s", var.name, var.type))
-  end
+  -- Initial content
+  local initial_lines = {
+    "# REPL Variables",
+    "",
+    "Loading variables...",
+    "",
+    "Press `R` to refresh"
+  }
+  api.nvim_buf_set_lines(buf, 0, -1, false, initial_lines)
 
-  api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-  local width = math.min(80, vim.o.columns)
-  local height = math.min(#lines + 2, vim.o.lines - 4)
-
-  local opts = {
+  -- Create window
+  local width = math.min(80, math.floor(vim.o.columns * 0.8))
+  local height = math.min(20, math.floor(vim.o.lines * 0.8))
+  local win = api.nvim_open_win(buf, true, {
     relative = 'editor',
     width = width,
     height = height,
@@ -879,9 +909,74 @@ function Neaterm:show_variables()
     col = math.floor((vim.o.columns - width) / 2),
     style = 'minimal',
     border = 'rounded',
-  }
+    title = ' REPL Variables ',
+    title_pos = 'center'
+  })
 
-  api.nvim_open_win(buf, true, opts)
+  -- Set window options
+  api.nvim_win_set_option(win, 'wrap', false)
+  api.nvim_win_set_option(win, 'cursorline', true)
+
+  -- Function to update variables display
+  local function update_variables()
+    self:capture_variables_async(function(vars)
+      if not api.nvim_buf_is_valid(buf) then return end
+
+      local lines = {
+        "# REPL Variables",
+        "",
+        string.format("## %s REPL", self.current_repl.filetype:upper()),
+        ""
+      }
+
+      if #vars == 0 then
+        table.insert(lines, "No variables found")
+      else
+        for _, var in ipairs(vars) do
+          table.insert(lines, string.format("- **%s**: `%s`", var.name, var.value))
+        end
+      end
+
+      table.insert(lines, "")
+      table.insert(lines, "_Press `R` to refresh, `q` to close_")
+
+      api.nvim_buf_set_option(buf, 'modifiable', true)
+      api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+      api.nvim_buf_set_option(buf, 'modifiable', false)
+    end)
+  end
+
+  -- Set up buffer-local keymaps
+  local opts = { noremap = true, silent = true, buffer = buf }
+  vim.keymap.set('n', 'q', function()
+    if api.nvim_win_is_valid(win) then
+      api.nvim_win_close(win, true)
+    end
+  end, opts)
+  vim.keymap.set('n', 'R', update_variables, opts)
+  vim.keymap.set('n', '<CR>', function()
+    local line = api.nvim_get_current_line()
+    local var_name = line:match("^%- %*%*([%w_]+)%*%*:")
+    if var_name then
+      vim.fn.setreg('+', var_name)
+      vim.notify("Variable name copied to clipboard", vim.log.levels.INFO)
+    end
+  end, opts)
+
+  -- Initial update
+  update_variables()
+
+  -- Auto-refresh timer
+  if self.opts.features.auto_refresh then
+    local timer = vim.loop.new_timer()
+    timer:start(1000, 3000, vim.schedule_wrap(function()
+      if api.nvim_buf_is_valid(buf) then
+        update_variables()
+      else
+        timer:stop()
+      end
+    end))
+  end
 end
 
 -- History Management Methods
