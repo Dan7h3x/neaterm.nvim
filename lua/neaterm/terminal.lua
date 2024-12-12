@@ -125,6 +125,45 @@ function Neaterm:setup_keymaps()
     { key = self.opts.keymaps.toggle_output,     func = function() self:toggle_output_capture() end, desc = "Toggle Output capturing",  mode = { 'n' } },
     { key = self.opts.keymaps.clear_output,      func = function() self:clear_output() end,          desc = "Clear Output ",            mode = { 'n' } },
     { key = self.opts.keymaps.smart_send,        func = function() self:smart_send_text() end,       desc = "Smart Send Output ",       mode = { 'n' } },
+
+    -- Add new keymap for show_variables
+    { 
+      key = self.opts.keymaps.show_variables or '<leader>rv',
+      func = function() self:show_variables() end,
+      desc = "Show REPL Variables",
+      mode = { 'n' }
+    },
+
+    -- Enhanced REPL operations with terminal features
+    { 
+      key = self.opts.keymaps.repl_send_block or '<leader>rb',
+      func = function()
+        local block = self:get_code_block()
+        self:send_text(block, { add_to_history = true })
+      end,
+      desc = "Send code block to REPL",
+      mode = { 'n' }
+    },
+    
+    -- Smart send based on context
+    {
+      key = self.opts.keymaps.smart_send or '<leader>rs',
+      func = function()
+        local mode = api.nvim_get_mode().mode
+        if mode == 'v' or mode == 'V' then
+          self:send_selection_to_repl()
+        else
+          local block = self:get_code_block()
+          if block:match("^%s*$") then
+            self:send_line_to_repl()
+          else
+            self:send_text(block, { add_to_history = true })
+          end
+        end
+      end,
+      desc = "Smart send to REPL",
+      mode = { 'n', 'v' }
+    },
   }
 
   -- Set normal mode mappings
@@ -132,7 +171,7 @@ function Neaterm:setup_keymaps()
     vim.keymap.set(map.mode, map.key, map.func, vim.tbl_extend('force', opts, { desc = map.desc }))
   end
 
-  -- Set visual mode mapping for REPL selection
+  -- Set visual mode mapping for REPL selection with terminal features
   vim.keymap.set('v', self.opts.keymaps.repl_send_selection, function()
     self:send_selection_to_repl()
   end, opts)
@@ -471,86 +510,56 @@ function Neaterm:format_text_for_repl(text)
   return formatted
 end
 
--- Enhanced visual selection handling
--- function Neaterm:send_selection_to_repl()
---   if not self:ensure_repl_exists() then return end
---
---   local mode = api.nvim_get_mode().mode
---   local text = self:get_visual_selection(mode)
---
---   if text and text ~= "" then
---     local lines_count = select(2, text:gsub("\n", "")) + 1
---     local success = self:send_text(text, {
---       add_to_history = true,
---       auto_create = true
---     })
---
---     if success then
---       -- Provide visual feedback
---       vim.api.nvim_exec([[normal! `<]], false) -- Return to selection start
---       vim.notify(string.format("Sent %d lines to %s REPL", lines_count,
---         self.current_repl.config.name), vim.log.levels.INFO)
---     end
---   end
--- end
+-- Enhanced visual selection handling with built-in tools
+function Neaterm:send_selection_to_repl()
+  if not self:ensure_repl_exists() then return end
 
--- Improved visual selection extraction
-function Neaterm:get_visual_selection(mode)
-  local start_pos = vim.fn.getpos("'<")
-  local end_pos = vim.fn.getpos("'>")
-  local start_row, start_col = start_pos[2], start_pos[3]
-  local end_row, end_col = end_pos[2], end_pos[3]
+  local mode = api.nvim_get_mode().mode
+  local text = utils.get_visual_selection()
 
-  -- Get the selected lines
-  local lines = api.nvim_buf_get_lines(0, start_row - 1, end_row, false)
-  if #lines == 0 then return nil end
+  if text and text ~= "" then
+    local lines_count = select(2, text:gsub("\n", "")) + 1
+    local success = self:send_text(text, {
+      add_to_history = true,
+      auto_create = true
+    })
 
-  -- Handle different visual modes
-  if mode == 'v' then -- Charwise visual
-    if #lines == 1 then
-      lines[1] = lines[1]:sub(start_col, end_col)
-    else
-      lines[1] = lines[1]:sub(start_col)
-      lines[#lines] = lines[#lines]:sub(1, end_col)
+    if success then
+      -- Use built-in terminal positioning
+      vim.api.nvim_exec([[normal! `<]], false)
+      vim.notify(string.format("Sent %d lines to %s REPL", lines_count,
+        self.current_repl.config.name), vim.log.levels.INFO)
     end
-  elseif mode == '' then -- Block visual
-    local new_lines = {}
-    for _, line in ipairs(lines) do
-      if #line >= start_col then
-        table.insert(new_lines, line:sub(start_col, math.min(end_col, #line)))
-      end
-    end
-    lines = new_lines
   end
-  -- Mode 'V' (linewise) doesn't need special handling
-
-  return table.concat(lines, "\n")
 end
 
--- VSCode-like buffer sending
--- function Neaterm:send_buffer_to_repl()
---   if not self:ensure_repl_exists() then return end
---
---   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
---   local text = table.concat(lines, "\n")
---
---   if text ~= "" then
---     local success = self:send_text(text, {
---       add_to_history = true,
---       auto_create = true
---     })
---
---     if success then
---       vim.notify(string.format("Sent buffer to %s REPL (%d lines)",
---         self.current_repl.config.name, #lines), vim.log.levels.INFO)
---     end
---   end
--- end
+-- VSCode-like buffer sending with terminal.txt features
+function Neaterm:send_buffer_to_repl()
+  if not self:ensure_repl_exists() then return end
 
--- Send current line with context awareness
+  -- Use built-in buffer access
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+
+  if text ~= "" then
+    local success = self:send_text(text, {
+      add_to_history = true,
+      auto_create = true
+    })
+
+    if success then
+      -- Provide visual feedback
+      vim.notify(string.format("Sent buffer to %s REPL (%d lines)",
+        self.current_repl.config.name, #lines), vim.log.levels.INFO)
+    end
+  end
+end
+
+-- Send current line with context awareness using terminal features
 function Neaterm:send_line_to_repl()
   if not self:ensure_repl_exists() then return end
 
+  -- Use built-in line access
   local line = api.nvim_get_current_line()
   if line:match("^%s*$") then
     vim.notify("Current line is empty", vim.log.levels.WARN)
@@ -563,12 +572,15 @@ function Neaterm:send_line_to_repl()
   })
 
   if success then
+    -- Move cursor to next line after sending
+    vim.cmd('normal! j')
     vim.notify("Sent line to REPL", vim.log.levels.INFO)
   end
 end
 
--- Get complete code block (for languages with significant whitespace)
-function Neaterm:get_code_block(start_line)
+-- Get complete code block using terminal's block detection
+function Neaterm:get_code_block()
+  local start_line = vim.fn.line('.')
   local lines = api.nvim_buf_get_lines(0, start_line - 1, -1, false)
   local block = { lines[1] }
   local base_indent = lines[1]:match("^%s*"):len()
@@ -801,53 +813,16 @@ function Neaterm:capture_variables_async()
   local config = self.repl_configs[self.current_repl.filetype]
   if not config or not config.get_variables_cmd then return {} end
 
-  -- Create a temporary buffer for capturing output
   local temp_buf = api.nvim_create_buf(false, true)
   local output = ""
 
-  -- Send command and capture output
   self:send_text(config.get_variables_cmd)
 
-  -- Wait briefly for output
   vim.defer_fn(function()
-    -- Get the terminal buffer content
     local lines = api.nvim_buf_get_lines(self.current_repl.buf, -20, -1, false)
     output = table.concat(lines, "\n")
 
-    -- Parse the output
-    local vars = {}
-    if config.parse_output then
-      vars = config.parse_output(output) or {}
-    else
-      -- Default parsing if no custom parser
-      for line in output:gmatch("[^\r\n]+") do
-        if not line:match("^%s*$") and not line:match("^In %[") then
-          table.insert(vars, {
-            name = line,
-            type = "unknown",
-            size = ""
-          })
-        end
-      end
-    end
-
-    -- Store variables
-    local vars_file = string.format(
-      "%s/neaterm_%s_vars.json",
-      vim.fn.stdpath('data'),
-      self.current_repl.filetype
-    )
-
-    local ok, encoded = pcall(vim.json.encode, vars)
-    if ok then
-      local file = io.open(vars_file, 'w')
-      if file then
-        file:write(encoded)
-        file:close()
-      end
-    end
-
-    -- Cleanup
+    local vars = config.parse_output and config.parse_output(output) or {}
     pcall(api.nvim_buf_delete, temp_buf, { force = true })
 
     return vars
@@ -884,85 +859,29 @@ function Neaterm:show_variables()
     return
   end
 
-  local config = self.repl_configs[self.current_repl.filetype]
-  if not config then return end
+  local vars = self:capture_variables_async()
+  local buf = api.nvim_create_buf(false, true)
+  local lines = { "# Active Variables", "" }
 
-  -- Function to display variables in fzf
-  local function display_vars(vars)
-    if type(vars) ~= "table" or vim.tbl_isempty(vars) then
-      vim.notify("No variables found", vim.log.levels.INFO)
-      return
-    end
-
-    local formatted_vars = {}
-    for _, var in ipairs(vars) do
-      table.insert(formatted_vars, string.format("%-30s │ %-20s │ %s",
-        var.name or "unknown",
-        var.type or "unknown",
-        var.size or var.info or ""
-      ))
-    end
-
-    if #formatted_vars == 0 then
-      vim.notify("No variables to display", vim.log.levels.INFO)
-      return
-    end
-
-    require('fzf-lua').fzf_exec(
-      formatted_vars,
-      {
-        prompt = "REPL Variables > ",
-        actions = {
-          ["default"] = function(selected)
-            if not selected or #selected == 0 then return end
-            local name = selected[1]:match("^([^│]+)"):gsub("%s+$", "")
-            if config.inspect_variable_cmd then
-              self:send_text(string.format("%s%s", name, config.inspect_variable_cmd))
-            end
-          end,
-          ["ctrl-r"] = function(_)
-            -- Refresh variables
-            self:capture_variables_async()
-            vim.defer_fn(function()
-              self:show_variables()
-            end, 200)
-          end,
-        },
-        fzf_opts = {
-          ["--delimiter"] = "│",
-          ["--with-nth"] = "1,2,3",
-          ["--header"] = "Variable Name                    │ Type                │ Size/Info",
-        },
-      }
-    )
+  for _, var in ipairs(vars) do
+    table.insert(lines, string.format("- **%s**: %s", var.name, var.type))
   end
 
-  -- Try to read from file first
-  local vars_file = string.format(
-    "%s/neaterm_%s_vars.json",
-    vim.fn.stdpath('data'),
-    self.current_repl.filetype
-  )
+  api.nvim_buf_set_lines(buf, 0, -1, false, lines)
+  local width = math.min(80, vim.o.columns)
+  local height = math.min(#lines + 2, vim.o.lines - 4)
 
-  local file = io.open(vars_file, 'r')
-  if file then
-    local content = file:read("*all")
-    file:close()
-    local ok, vars = pcall(vim.json.decode, content)
-    if ok and type(vars) == "table" and next(vars) then
-      display_vars(vars)
-      return
-    end
-  end
+  local opts = {
+    relative = 'editor',
+    width = width,
+    height = height,
+    row = math.floor((vim.o.lines - height) / 2),
+    col = math.floor((vim.o.columns - width) / 2),
+    style = 'minimal',
+    border = 'rounded',
+  }
 
-  -- If file doesn't exist or is empty, capture variables directly
-  self:capture_variables_async()
-  vim.defer_fn(function()
-    local vars = self:capture_variables_async()
-    if vars then
-      display_vars(vars)
-    end
-  end, 300)
+  api.nvim_open_win(buf, true, opts)
 end
 
 -- History Management Methods
@@ -1062,90 +981,6 @@ function Neaterm:safe_close_repl()
     ui.update_bar(self)
   end, 100)
 end
-
--- Add this method to the Neaterm class
--- function Neaterm:setup_terminal_settings(win, buf)
---   -- Window-specific settings
---   local win_opts = {
---     number = false,
---     relativenumber = false,
---     signcolumn = "no",
---     wrap = false,
---   }
---
---   for opt, value in pairs(win_opts) do
---     api.nvim_win_set_option(win, opt, value)
---   end
---
---   -- Buffer-specific settings
---   local buf_opts = {
---     bufhidden = "hide",
---     filetype = "neaterm",
---     buflisted = false,
---   }
---
---   for opt, value in pairs(buf_opts) do
---     api.nvim_buf_set_option(buf, opt, value)
---   end
---
---   -- Terminal-specific keymaps with descriptions
---   local term_maps = {
---     ['<ESC><ESC>'] = {
---       cmd = '<C-\\><C-n>',
---       desc = 'Exit terminal insert mode'
---     },
---     ['<C-\\><C-n>'] = {
---       cmd = '<Cmd>startinsert<CR>',
---       desc = 'Enter terminal insert mode'
---     },
---     ['<C-h>'] = {
---       cmd = '<Cmd>wincmd h<CR>',
---       desc = 'Move to left window'
---     },
---     ['<C-j>'] = {
---       cmd = '<Cmd>wincmd j<CR>',
---       desc = 'Move to bottom window'
---     },
---     ['<C-k>'] = {
---       cmd = '<Cmd>wincmd k<CR>',
---       desc = 'Move to top window'
---     },
---     ['<C-l>'] = {
---       cmd = '<Cmd>wincmd l<CR>',
---       desc = 'Move to right window'
---     },
---     ['<C-w>'] = {
---       cmd = '<C-\\><C-n><C-w>',
---       desc = 'Window command prefix'
---     }
---   }
---
---   for lhs, map in pairs(term_maps) do
---     vim.keymap.set('t', lhs, map.cmd, {
---       buffer = buf,
---       silent = true,
---       desc = map.desc
---     })
---   end
---
---   -- Add new features
---   -- Auto-resize on terminal window focus
---   api.nvim_create_autocmd("WinEnter", {
---     buffer = buf,
---     callback = function()
---       if vim.bo[buf].buftype == 'terminal' then
---         vim.cmd('startinsert')
---       end
---     end,
---     desc = "Auto-enter insert mode in terminal"
---   })
---
---   -- Add terminal title
---   -- if term.cmd then
---   --   local title = term.cmd:match("([^/]+)$") or "terminal"
---   --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
---   -- end
--- end
 
 -- Add navigation methods
 function Neaterm:next_terminal()
