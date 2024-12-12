@@ -14,6 +14,7 @@ function Neaterm.new(opts)
   self.current_repl = nil
   self.history = {}
   self.variables = {}
+  self.auto_refresh_timer = nil  -- Add timer reference for cleanup
   return self
 end
 
@@ -440,44 +441,48 @@ end
 
 -- Text Sending Methods with improved handling
 function Neaterm:send_text(text, opts)
-  if not text then return end
   opts = opts or {}
-
-  local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
-  if not term_buf or not self.terminals[term_buf] then
-    if opts.auto_create and self:ensure_repl_exists() then
-      term_buf = self.current_repl.buf
-    else
-      vim.notify("No active REPL", vim.log.levels.WARN)
-      return
+  if not text or text == "" then return false end
+  
+  local repl = self.current_repl
+  if not repl or not repl.buf then
+    if opts.auto_create then
+      -- TODO: Implement auto-create REPL logic
+      vim.notify("Auto-create REPL not implemented yet", vim.log.levels.WARN)
     end
-  end
-
-  local term = self.terminals[term_buf]
-  if not term or not term.job_id then return end
-
-  -- Check if job is still valid
-  local valid_job = vim.fn.jobwait({ term.job_id }, 0)[1] == -1
-  if not valid_job then
-    vim.notify("Terminal job is no longer valid", vim.log.levels.WARN)
-    return
-  end
-
-  -- Format text based on REPL config
-  local formatted_text = self:format_text_for_repl(text)
-
-  -- Safely send text to terminal
-  local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
-  if not success then
-    vim.notify("Failed to send text: " .. err, vim.log.levels.ERROR)
     return false
   end
-
-  -- Add to history if successful
-  if self.current_repl and opts.add_to_history ~= false then
-    self:add_to_history(text, self.current_repl.filetype)
+  
+  -- Ensure terminal channel is valid
+  local chan = vim.api.nvim_buf_get_var(repl.buf, "terminal_job_id")
+  if not chan then
+    vim.notify("Invalid terminal channel", vim.log.levels.ERROR)
+    return false
   end
-
+  
+  -- Process text based on REPL config
+  local processed_text = text
+  if repl.config and repl.config.process_text then
+    processed_text = repl.config.process_text(text)
+  end
+  
+  -- Ensure text ends with proper line ending
+  if not processed_text:match("\n$") then
+    processed_text = processed_text .. "\n"
+  end
+  
+  -- Send text to terminal
+  local success = pcall(vim.api.nvim_chan_send, chan, processed_text)
+  if not success then
+    vim.notify("Failed to send text to REPL", vim.log.levels.ERROR)
+    return false
+  end
+  
+  -- Add to history if requested
+  if opts.add_to_history then
+    self:add_to_history(text, repl.filetype)
+  end
+  
   return true
 end
 
@@ -873,107 +878,100 @@ end
 
 -- Update show_variables to use the new methods
 function Neaterm:show_variables()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
+  if not self:ensure_repl_exists() then return end
+  
+  -- Clean up existing timer if any
+  if self.auto_refresh_timer then
+    self.auto_refresh_timer:stop()
+    self.auto_refresh_timer:close()
+    self.auto_refresh_timer = nil
+  end
+  
+  -- Create buffer for variables
+  local buf = vim.api.nvim_create_buf(false, true)
+  if not buf then
+    vim.notify("Failed to create buffer", vim.log.levels.ERROR)
     return
   end
-
-  -- Create buffer for variables
-  local buf = api.nvim_create_buf(false, true)
-  api.nvim_buf_set_option(buf, 'modifiable', false)
-  api.nvim_buf_set_option(buf, 'buftype', 'nofile')
-  api.nvim_buf_set_option(buf, 'filetype', 'markdown')
-  api.nvim_buf_set_name(buf, 'REPL Variables')
-
-  -- Initial content
-  local initial_lines = {
-    "# REPL Variables",
-    "",
-    "Loading variables...",
-    "",
-    "Press `R` to refresh"
+  
+  -- Set buffer options
+  local buf_opts = {
+    modifiable = false,
+    buftype = 'nofile',
+    filetype = 'markdown',
+    swapfile = false,
+    bufhidden = 'wipe'
   }
-  api.nvim_buf_set_lines(buf, 0, -1, false, initial_lines)
-
-  -- Create window
-  local width = math.min(80, math.floor(vim.o.columns * 0.8))
-  local height = math.min(20, math.floor(vim.o.lines * 0.8))
-  local win = api.nvim_open_win(buf, true, {
+  
+  for opt, value in pairs(buf_opts) do
+    vim.api.nvim_buf_set_option(buf, opt, value)
+  end
+  
+  -- Set buffer name with unique identifier
+  vim.api.nvim_buf_set_name(buf, string.format('REPL Variables [%s]', self.current_repl.filetype))
+  
+  -- Create window with proper dimensions
+  local win_config = vim.tbl_extend('force', self.opts.variables.window, {
     relative = 'editor',
-    width = width,
-    height = height,
-    row = math.floor((vim.o.lines - height) / 2),
-    col = math.floor((vim.o.columns - width) / 2),
+    width = math.floor(vim.o.columns * self.opts.variables.window.width),
+    height = math.floor(vim.o.lines * self.opts.variables.window.height),
+    row = 1,
+    col = 1,
     style = 'minimal',
-    border = 'rounded',
-    title = ' REPL Variables ',
-    title_pos = 'center'
   })
-
-  -- Set window options
-  api.nvim_win_set_option(win, 'wrap', false)
-  api.nvim_win_set_option(win, 'cursorline', true)
-
-  -- Function to update variables display
-  local function update_variables()
-    self:capture_variables_async(function(vars)
-      if not api.nvim_buf_is_valid(buf) then return end
-
-      local lines = {
-        "# REPL Variables",
-        "",
-        string.format("## %s REPL", self.current_repl.filetype:upper()),
-        ""
-      }
-
-      if #vars == 0 then
-        table.insert(lines, "No variables found")
-      else
-        for _, var in ipairs(vars) do
-          table.insert(lines, string.format("- **%s**: `%s`", var.name, var.value))
-        end
-      end
-
-      table.insert(lines, "")
-      table.insert(lines, "_Press `R` to refresh, `q` to close_")
-
-      api.nvim_buf_set_option(buf, 'modifiable', true)
-      api.nvim_buf_set_lines(buf, 0, -1, false, lines)
-      api.nvim_buf_set_option(buf, 'modifiable', false)
-    end)
+  
+  local win = vim.api.nvim_open_win(buf, true, win_config)
+  if not win then
+    vim.api.nvim_buf_delete(buf, { force = true })
+    vim.notify("Failed to create window", vim.log.levels.ERROR)
+    return
   end
-
-  -- Set up buffer-local keymaps
-  local opts = { noremap = true, silent = true, buffer = buf }
-  vim.keymap.set('n', 'q', function()
-    if api.nvim_win_is_valid(win) then
-      api.nvim_win_close(win, true)
-    end
-  end, opts)
-  vim.keymap.set('n', 'R', update_variables, opts)
-  vim.keymap.set('n', '<CR>', function()
-    local line = api.nvim_get_current_line()
-    local var_name = line:match("^%- %*%*([%w_]+)%*%*:")
-    if var_name then
-      vim.fn.setreg('+', var_name)
-      vim.notify("Variable name copied to clipboard", vim.log.levels.INFO)
-    end
-  end, opts)
-
-  -- Initial update
-  update_variables()
-
-  -- Auto-refresh timer
+  
+  -- Set up auto-refresh
   if self.opts.features.auto_refresh then
-    local timer = vim.loop.new_timer()
-    timer:start(1000, 3000, vim.schedule_wrap(function()
-      if api.nvim_buf_is_valid(buf) then
-        update_variables()
-      else
-        timer:stop()
-      end
-    end))
+    self.auto_refresh_timer = vim.loop.new_timer()
+    self.auto_refresh_timer:start(
+      1000,
+      self.opts.variables.auto_refresh_interval,
+      vim.schedule_wrap(function()
+        if not vim.api.nvim_buf_is_valid(buf) then
+          if self.auto_refresh_timer then
+            self.auto_refresh_timer:stop()
+            self.auto_refresh_timer:close()
+            self.auto_refresh_timer = nil
+          end
+          return
+        end
+        self:update_variables_display(buf)
+      end)
+    )
   end
+  
+  -- Set up buffer-local keymaps
+  local keymap_opts = { noremap = true, silent = true, buffer = buf }
+  local keymaps = {
+    ['q'] = function() 
+      if vim.api.nvim_win_is_valid(win) then
+        vim.api.nvim_win_close(win, true)
+      end
+    end,
+    ['R'] = function() self:update_variables_display(buf) end,
+    ['<CR>'] = function()
+      local line = vim.api.nvim_get_current_line()
+      local var_name = line:match("^%- %*%*([%w_]+)%*%*:")
+      if var_name then
+        vim.fn.setreg('+', var_name)
+        vim.notify("Variable name copied to clipboard", vim.log.levels.INFO)
+      end
+    end,
+  }
+  
+  for lhs, rhs in pairs(keymaps) do
+    vim.keymap.set('n', lhs, rhs, keymap_opts)
+  end
+  
+  -- Initial update
+  self:update_variables_display(buf)
 end
 
 -- History Management Methods
@@ -2090,6 +2088,43 @@ function Neaterm:clear_output()
     self.output_lines = {}
     vim.notify("Output cleared", vim.log.levels.INFO)
   end
+end
+
+-- Ensure REPL exists and is valid
+function Neaterm:ensure_repl_exists()
+  if not self.current_repl then
+    vim.notify("No active REPL found", vim.log.levels.WARN)
+    return false
+  end
+  
+  if not self.current_repl.buf or not vim.api.nvim_buf_is_valid(self.current_repl.buf) then
+    vim.notify("REPL buffer is invalid", vim.log.levels.ERROR)
+    self.current_repl = nil
+    return false
+  end
+  
+  return true
+end
+
+-- Clean up resources
+function Neaterm:cleanup()
+  if self.auto_refresh_timer then
+    self.auto_refresh_timer:stop()
+    self.auto_refresh_timer:close()
+    self.auto_refresh_timer = nil
+  end
+  
+  -- Clean up terminal buffers
+  for buf, _ in pairs(self.terminals) do
+    if vim.api.nvim_buf_is_valid(buf) then
+      vim.api.nvim_buf_delete(buf, { force = true })
+    end
+  end
+  
+  -- Clear references
+  self.terminals = {}
+  self.current_terminal = nil
+  self.current_repl = nil
 end
 
 return Neaterm

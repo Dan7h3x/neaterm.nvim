@@ -1,6 +1,49 @@
 local M = {}
 
----@class NeatermConfig
+-- Default keymap configuration with explicit LHS definitions
+local default_keymaps = {
+  toggle = '<A-t>',            -- Alt + t
+  new_vertical = '<C-\\>',     -- Ctrl + \
+  new_horizontal = '<C-.>',    -- Ctrl + .
+  new_float = '<C-A-t>',      -- Ctrl + Alt + t
+  close = '<A-d>',            -- Alt + d
+  next = '<C-PageDown>',      -- Ctrl + PageDown
+  prev = '<C-PageUp>',        -- Ctrl + PageUp
+  move_up = '<C-A-Up>',       -- Ctrl + Alt + Up
+  move_down = '<C-A-Down>',   -- Ctrl + Alt + Down
+  move_left = '<C-A-Left>',   -- Ctrl + Alt + Left
+  move_right = '<C-A-Right>', -- Ctrl + Alt + Right
+  resize_up = '<C-S-Up>',     -- Ctrl + Shift + Up
+  resize_down = '<C-S-Down>', -- Ctrl + Shift + Down
+  resize_left = '<C-S-Left>', -- Ctrl + Shift + Left
+  resize_right = '<C-S-Right>',-- Ctrl + Shift + Right
+  focus_bar = '<C-A-b>',      -- Ctrl + Alt + b
+  
+  -- REPL specific keymaps
+  repl_toggle = '<Leader>rt',
+  repl_send_line = '<Leader>rl',
+  repl_send_selection = '<Leader>rs',
+  repl_send_buffer = '<Leader>rb',
+  repl_send_block = '<Leader>rB',
+  repl_clear = '<Leader>rc',
+  repl_history = '<Leader>rh',
+  repl_variables = '<Leader>rv',
+  show_variables = '<Leader>rv',
+  repl_restart = '<Leader>rr',
+  repl_repeat_last = '<Leader>r.',
+  repl_clear_vars = '<Leader>rx',
+  
+  -- Cell navigation
+  cell_next = ']c',
+  cell_prev = '[c',
+  cell_execute = '<Leader>x',
+  
+  -- Smart send operations
+  smart_send = '<Leader>sb',
+  auto_smart_send = '<Leader>tv',
+}
+
+-- Default configuration
 local default_opts = {
   -- terminal settings
   shell = vim.o.shell,
@@ -69,41 +112,7 @@ local default_opts = {
 
   -- default keymaps
   use_default_keymaps = true,
-  keymaps = {
-    toggle = '<a-t>',
-    new_vertical = '<c-\\>',
-    new_horizontal = '<c-.>',
-    new_float = '<c-a-t>',
-    close = '<a-d>',
-    next = '<c-pagedown>',
-    prev = '<c-pageup>',
-    move_up = '<c-a-up>',
-    move_down = '<c-a-down>',
-    move_left = '<c-a-left>',
-    move_right = '<c-a-right>',
-    resize_up = '<c-s-up>',
-    resize_down = '<c-s-down>',
-    resize_left = '<c-s-left>',
-    resize_right = '<c-s-right>',
-    focus_bar = '<c-a-b>',
-    repl_toggle = '<leader>rt',
-    repl_send_line = '<leader>rl',
-    repl_send_selection = '<leader>rs',
-    repl_send_buffer = '<leader>rb',
-    repl_send_block = '<leader>rB',
-    repl_clear = '<leader>rc',
-    repl_history = '<leader>rh',
-    repl_variables = '<leader>rv',
-    show_variables = '<leader>rv',
-    repl_restart = '<leader>rr',
-    repl_repeat_last = '<leader>r.',
-    repl_clear_vars = '<leader>rx',
-    cell_next = ']c',
-    cell_prev = '[c',
-    cell_execute = '<leader>x',
-    smart_send = '<leader>sb',
-    auto_smart_send = '<leader>tv',
-  },
+  keymaps = default_keymaps,
 
   -- repl configurations
   repl = {
@@ -224,6 +233,7 @@ local default_opts = {
     cell_support = true,
     output_capture = true,
     session_management = true,
+    auto_refresh = true,  -- New feature for variables window
   },
 
   -- cell configuration
@@ -282,31 +292,50 @@ local default_opts = {
       max_memory = 500,
     },
   },
+
+  -- Variables window configuration
+  variables = {
+    auto_refresh_interval = 3000,
+    window = {
+      width = 0.8,
+      height = 0.8,
+      border = 'rounded',
+      title = ' REPL Variables ',
+      title_pos = 'center',
+    },
+  },
 }
 
----@param user_opts? table
----@return NeatermConfig
+-- Function to validate and merge keymap configurations
+local function merge_keymaps(user_keymaps)
+  if not user_keymaps then return default_keymaps end
+  
+  local merged = vim.deepcopy(default_keymaps)
+  for k, v in pairs(user_keymaps) do
+    if type(v) == 'string' then
+      merged[k] = v
+    end
+  end
+  
+  return merged
+end
+
+-- Function to validate and merge configurations
 function M.setup(user_opts)
   -- Ensure user_opts is a table
   user_opts = user_opts or {}
-
+  
   -- Deep copy of default options
   local opts = vim.deepcopy(default_opts)
-
-  -- Merge user options
+  
+  -- Special handling for keymaps
+  if user_opts.keymaps then
+    opts.keymaps = merge_keymaps(user_opts.keymaps)
+  end
+  
+  -- Merge other options
   for key, value in pairs(user_opts) do
-    if key == 'repl_configs' then
-      -- Special handling for REPL configs
-      opts.repl_configs = opts.repl_configs or {}
-      for lang, config in pairs(value) do
-        if opts.repl_configs[lang] then
-          opts.repl_configs[lang] = vim.tbl_deep_extend('force', opts.repl_configs[lang], config)
-        else
-          opts.repl_configs[lang] = config
-        end
-      end
-    else
-      -- Regular option merging
+    if key ~= 'keymaps' then
       if type(value) == 'table' then
         opts[key] = vim.tbl_deep_extend('force', opts[key] or {}, value)
       else
@@ -314,7 +343,12 @@ function M.setup(user_opts)
       end
     end
   end
-
+  
+  -- Validate critical options
+  opts.use_default_keymaps = type(opts.use_default_keymaps) == 'boolean' 
+    and opts.use_default_keymaps 
+    or true
+    
   return opts
 end
 
@@ -323,21 +357,21 @@ M.lazy = {
   'Dan7h3x/neaterm.nvim',
   event = 'VeryLazy',
   keys = {
-    { '<A-t>',      desc = 'Toggle terminal' },
-    { '<C-\\>',     desc = 'New vertical terminal' },
-    { '<C-.>',      desc = 'New horizontal terminal' },
-    { '<C-A-t>',    desc = 'New floating terminal' },
-    { '<leader>rt', desc = 'Toggle REPL menu' },
-    { '<leader>rl', desc = 'Send line to REPL' },
-    { '<leader>rs', mode = 'v',                      desc = 'Send selection to REPL' },
-    { '<leader>rb', desc = 'Send buffer to REPL' },
+    -- Define lazy.nvim keys based on default_keymaps
+    { '<A-t>', desc = 'Toggle terminal' },
+    { '<C-\\>', desc = 'New vertical terminal' },
+    { '<C-.>', desc = 'New horizontal terminal' },
+    { '<C-A-t>', desc = 'New floating terminal' },
+    { '<Leader>rt', desc = 'Toggle REPL menu' },
+    { '<Leader>rl', desc = 'Send line to REPL' },
+    { '<Leader>rs', mode = { 'n', 'v' }, desc = 'Send selection to REPL' },
+    { '<Leader>rb', desc = 'Send buffer to REPL' },
+    { '<Leader>rv', desc = 'Show REPL variables' },
   },
-  opts = {
-    -- User can override default options here
-    -- Example:
-    -- float_width = 0.7,
-    -- float_height = 0.5,
-  },
+  opts = function()
+    -- Return empty table by default to allow user configuration
+    return {}
+  end,
   config = function(_, opts)
     require('neaterm').setup(opts)
   end,
@@ -346,5 +380,30 @@ M.lazy = {
     'ibhagwan/fzf-lua',
   },
 }
+
+-- Function to check for keymap conflicts
+function M.check_keymap_conflicts(opts)
+  local conflicts = {}
+  for lhs, _ in pairs(opts.keymaps) do
+    local existing = vim.fn.maparg(lhs, 'n')
+    if existing ~= '' then
+      table.insert(conflicts, {
+        lhs = lhs,
+        existing = existing
+      })
+    end
+  end
+  
+  if #conflicts > 0 then
+    local msg = "Neaterm keymap conflicts detected:\n"
+    for _, conflict in ipairs(conflicts) do
+      msg = msg .. string.format("- %s is already mapped to: %s\n", 
+        conflict.lhs, conflict.existing)
+    end
+    vim.notify(msg, vim.log.levels.WARN)
+  end
+  
+  return conflicts
+end
 
 return M
