@@ -121,9 +121,6 @@ function Neaterm:setup_keymaps()
     { key = self.opts.keymaps.focus_bar,         func = function() self:focus_bar() end,             desc = "Focus bar",                mode = { 'n' } },
     { key = self.opts.keymaps.cell_next,         func = function() self:move_to_next_cell() end,     desc = "Move to next cell",        mode = { 'n' } },
     { key = self.opts.keymaps.cell_prev,         func = function() self:move_to_previous_cell() end, desc = "Move to prev cell",        mode = { 'n' } },
-    { key = self.opts.keymaps.inspect_var,       func = function() self:inspect_variable() end,      desc = "Inspect the vartiables",   mode = { 'n' } },
-    { key = self.opts.keymaps.toggle_output,     func = function() self:toggle_output_capture() end, desc = "Toggle Output capturing",  mode = { 'n' } },
-    { key = self.opts.keymaps.clear_output,      func = function() self:clear_output() end,          desc = "Clear Output ",            mode = { 'n' } },
     { key = self.opts.keymaps.smart_send,        func = function() self:smart_send_text() end,       desc = "Smart Send Output ",       mode = { 'n' } },
 
     -- Add new keymap for show_variables
