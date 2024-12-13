@@ -114,7 +114,8 @@ function Neaterm:setup_keymaps()
     { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,        desc = "Show REPL history",   mode = { 'n' } },
     { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,      desc = "Show REPL variables", mode = { 'n' } },
     { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,        desc = "Restart REPL",        mode = { 'n' } },
-
+    { key = self.opts.keymaps.repl_send_block, func = function() self:send_code_block() end, desc = "Send code block to REPL", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_inspector, func = function() self:create_variable_inspector() end, desc = "Toggle variable inspector", mode = { 'n' } },
     -- Bar operations
     { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,           desc = "Focus bar",           mode = { 'n' } },
   }
@@ -1322,6 +1323,200 @@ function Neaterm:setup_features()
     silent = true,
     desc = self.opts.keymaps.terminal_picker.desc
   })
+end
+
+-- Add these new methods to the Neaterm class
+function Neaterm:send_code_block()
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
+
+  local current_line = vim.fn.line('.')
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local block_start, block_end = current_line, current_line
+
+  -- Search backwards for block start
+  for i = current_line - 1, 1, -1 do
+    if lines[i]:match("^%s*$") then
+      block_start = i + 1
+      break
+    end
+    block_start = i
+  end
+
+  -- Search forwards for block end
+  for i = current_line + 1, #lines do
+    if lines[i]:match("^%s*$") then
+      block_end = i - 1
+      break
+    end
+    block_end = i
+  end
+
+  local block = table.concat(lines, "\n", block_start, block_end)
+  if block ~= "" then
+    self:add_to_history(block, self.current_repl.filetype)
+    self:send_text(block)
+  end
+end
+
+-- Add variable inspector functionality
+function Neaterm:create_variable_inspector()
+  -- Create a new buffer for the variable inspector
+  self.var_inspector = {
+    buf = api.nvim_create_buf(false, true),
+    win = nil,
+    update_timer = nil
+  }
+
+  -- Set buffer options
+  api.nvim_buf_set_option(self.var_inspector.buf, 'buftype', 'nofile')
+  api.nvim_buf_set_option(self.var_inspector.buf, 'bufhidden', 'hide')
+  api.nvim_buf_set_option(self.var_inspector.buf, 'swapfile', false)
+  api.nvim_buf_set_option(self.var_inspector.buf, 'filetype', 'neaterm-inspector')
+
+  -- Create window
+  local win_opts = {
+    style = 'minimal',
+    relative = 'editor',
+    width = math.floor(vim.o.columns * 0.2),
+    height = math.floor(vim.o.lines * 0.8),
+    row = 1,
+    col = vim.o.columns - math.floor(vim.o.columns * 0.2) - 1,
+    border = self.opts.border
+  }
+
+  self.var_inspector.win = api.nvim_open_win(self.var_inspector.buf, false, win_opts)
+
+  -- Set window options
+  local win_local_opts = {
+    wrap = false,
+    cursorline = true,
+    number = false,
+    relativenumber = false,
+    signcolumn = "no"
+  }
+
+  for opt, value in pairs(win_local_opts) do
+    api.nvim_win_set_option(self.var_inspector.win, opt, value)
+  end
+
+  -- Setup automatic updates
+  self.var_inspector.update_timer = vim.loop.new_timer()
+  self.var_inspector.update_timer:start(1000, 1000, vim.schedule_wrap(function()
+    self:update_variable_inspector()
+  end))
+
+  -- Setup keymaps for the inspector
+  local inspector_maps = {
+    ["<CR>"] = function()
+      self:inspect_variable_under_cursor()
+    end,
+    ["d"] = function()
+      self:delete_variable_under_cursor()
+    end,
+    ["r"] = function()
+      self:update_variable_inspector()
+    end,
+    ["q"] = function()
+      self:close_variable_inspector()
+    end
+  }
+
+  for key, func in pairs(inspector_maps) do
+    vim.keymap.set('n', key, func, {
+      buffer = self.var_inspector.buf,
+      silent = true,
+      nowait = true
+    })
+  end
+end
+
+function Neaterm:update_variable_inspector()
+  if not self.current_repl or not self.var_inspector then return end
+
+  local config = self.repl_configs[self.current_repl.filetype]
+  if not config or not config.get_variables_cmd then return end
+
+  -- Capture variables asynchronously
+  self:capture_variables_async(function(vars)
+    if not api.nvim_buf_is_valid(self.var_inspector.buf) then return end
+
+    -- Format variables for display
+    local lines = {
+      "# Variables (" .. self.current_repl.filetype .. ")",
+      string.rep("─", 50),
+      string.format("%-20s │ %-15s │ %s", "Name", "Type", "Size/Info"),
+      string.rep("─", 50)
+    }
+
+    for _, var in ipairs(vars) do
+      table.insert(lines, string.format("%-20s │ %-15s │ %s",
+        var.name or "",
+        var.type or "",
+        var.size or var.info or ""
+      ))
+    end
+
+    -- Update buffer content
+    api.nvim_buf_set_lines(self.var_inspector.buf, 0, -1, false, lines)
+
+    -- Set buffer highlights
+    local ns_id = api.nvim_create_namespace('neaterm_inspector')
+    api.nvim_buf_clear_namespace(self.var_inspector.buf, ns_id, 0, -1)
+
+    -- Add highlights
+    vim.highlight.range(self.var_inspector.buf, ns_id, 'Title', {0, 0}, {0, -1})
+    vim.highlight.range(self.var_inspector.buf, ns_id, 'Comment', {2, 0}, {2, -1})
+    vim.highlight.range(self.var_inspector.buf, ns_id, 'Special', {3, 0}, {3, -1})
+  end)
+end
+
+function Neaterm:inspect_variable_under_cursor()
+  if not self.current_repl then return end
+
+  local line = api.nvim_get_current_line()
+  local var_name = line:match("^([^│]+)"):gsub("%s+$", "")
+  
+  local config = self.repl_configs[self.current_repl.filetype]
+  if config and config.inspect_variable_cmd then
+    local cmd = string.format(config.inspect_variable_cmd, var_name)
+    self:send_text(cmd)
+  end
+end
+
+function Neaterm:delete_variable_under_cursor()
+  if not self.current_repl then return end
+
+  local line = api.nvim_get_current_line()
+  local var_name = line:match("^([^│]+)"):gsub("%s+$", "")
+  
+  local config = self.repl_configs[self.current_repl.filetype]
+  if config and config.delete_variable_cmd then
+    local cmd = string.format(config.delete_variable_cmd, var_name)
+    self:send_text(cmd)
+    -- Update inspector after brief delay
+    vim.defer_fn(function()
+      self:update_variable_inspector()
+    end, 100)
+  end
+end
+
+function Neaterm:close_variable_inspector()
+  if self.var_inspector then
+    if self.var_inspector.update_timer then
+      self.var_inspector.update_timer:stop()
+      self.var_inspector.update_timer:close()
+    end
+    if self.var_inspector.win and api.nvim_win_is_valid(self.var_inspector.win) then
+      api.nvim_win_close(self.var_inspector.win, true)
+    end
+    if self.var_inspector.buf and api.nvim_buf_is_valid(self.var_inspector.buf) then
+      api.nvim_buf_delete(self.var_inspector.buf, { force = true })
+    end
+    self.var_inspector = nil
+  end
 end
 
 return Neaterm

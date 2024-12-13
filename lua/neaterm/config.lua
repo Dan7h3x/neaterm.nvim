@@ -90,6 +90,9 @@ local default_opts = {
     repl_send_line = '<leader>rl',
     repl_send_selection = '<leader>rs',
     repl_send_buffer = '<leader>rb',
+    repl_send_block = '<leader>sb',  -- Send current code block
+    repl_inspector = '<leader>si',    -- Toggle variable inspector
+
     repl_clear = '<leader>rc',
     repl_history = '<leader>rh',
     repl_variables = '<leader>rv',
@@ -104,6 +107,10 @@ local default_opts = {
     history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
     max_history = 100,
     update_interval = 5000,
+    auto_inspect = true,              -- Automatically open inspector for new REPLs
+    inspect_interval = 1000,          -- Update interval in milliseconds
+    inspect_position = 'right',       -- Where to show the inspector (left/right)
+    inspect_width = 0.2,              -- Width of the inspector window (0-1)
   },
 
   -- REPL language configurations
