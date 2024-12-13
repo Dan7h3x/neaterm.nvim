@@ -172,6 +172,49 @@ local default_opts = {
     native_search = true,
     clipboard_sync = true,
     shell_integration = true,
+    completion = {
+      enable = true,
+      trigger_chars = { ".", "_" },
+      max_items = 50,
+    },
+    plot_viewer = {
+      enable = true,
+      auto_update = true,
+      width = 0.4,
+      height = 0.4,
+      position = "right", -- or "left"
+    },
+    debug = {
+      enable = true,
+      signs = {
+        breakpoint = "●",
+        current_line = "→",
+      },
+      highlight = {
+        breakpoint = "ErrorMsg",
+        current_line = "DiffAdd",
+      },
+    },
+    workspace = {
+      enable = true,
+      auto_save = true,
+      save_interval = 300, -- seconds
+    },
+    package_manager = {
+      enable = true,
+      auto_update_check = true,
+    },
+    snippets = {
+      enable = true,
+      expand_trigger = "<Tab>",
+    },
+    documentation = {
+      enable = true,
+      auto_show = true,
+      width = 0.4,
+      height = 0.4,
+      position = "right",
+    },
   },
 }
 
