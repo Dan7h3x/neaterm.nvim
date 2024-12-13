@@ -1370,21 +1370,24 @@ function Neaterm:create_variable_inspector()
     update_timer = nil
   }
 
-  -- Set buffer options
+  -- Set buffer options for markdown
   api.nvim_buf_set_option(self.var_inspector.buf, 'buftype', 'nofile')
   api.nvim_buf_set_option(self.var_inspector.buf, 'bufhidden', 'hide')
   api.nvim_buf_set_option(self.var_inspector.buf, 'swapfile', false)
-  api.nvim_buf_set_option(self.var_inspector.buf, 'filetype', 'neaterm-inspector')
+  api.nvim_buf_set_option(self.var_inspector.buf, 'filetype', 'markdown')
 
   -- Create window
   local win_opts = {
     style = 'minimal',
     relative = 'editor',
-    width = math.floor(vim.o.columns * 0.2),
+    width = math.floor(vim.o.columns * (self.opts.repl.inspect_width or 0.2)),
     height = math.floor(vim.o.lines * 0.8),
     row = 1,
-    col = vim.o.columns - math.floor(vim.o.columns * 0.2) - 1,
-    border = self.opts.border
+    col = self.opts.repl.inspect_position == 'left' and 1 or 
+          (vim.o.columns - math.floor(vim.o.columns * (self.opts.repl.inspect_width or 0.2)) - 1),
+    border = self.opts.border,
+    title = ' Variable Inspector ',
+    title_pos = 'center',
   }
 
   self.var_inspector.win = api.nvim_open_win(self.var_inspector.buf, false, win_opts)
@@ -1395,7 +1398,9 @@ function Neaterm:create_variable_inspector()
     cursorline = true,
     number = false,
     relativenumber = false,
-    signcolumn = "no"
+    signcolumn = "no",
+    foldenable = false,
+    conceallevel = 2,
   }
 
   for opt, value in pairs(win_local_opts) do
@@ -1443,21 +1448,38 @@ function Neaterm:update_variable_inspector()
   self:capture_variables_async(function(vars)
     if not api.nvim_buf_is_valid(self.var_inspector.buf) then return end
 
-    -- Format variables for display
+    -- Format variables as markdown table
     local lines = {
-      "# Variables (" .. self.current_repl.filetype .. ")",
-      string.rep("─", 50),
-      string.format("%-20s │ %-15s │ %s", "Name", "Type", "Size/Info"),
-      string.rep("─", 50)
+      "# REPL Variables",
+      string.format("**Session**: %s", self.current_repl.filetype),
+      "",
+      "| Name | Type | Size/Info |",
+      "|------|------|-----------|",
     }
 
     for _, var in ipairs(vars) do
-      table.insert(lines, string.format("%-20s │ %-15s │ %s",
-        var.name or "",
-        var.type or "",
-        var.size or var.info or ""
+      -- Escape pipe characters in variable data
+      local name = (var.name or ""):gsub("|", "\\|")
+      local type = (var.type or ""):gsub("|", "\\|")
+      local info = (var.size or var.info or ""):gsub("|", "\\|")
+      
+      table.insert(lines, string.format("| %s | %s | %s |",
+        name,
+        type,
+        info
       ))
     end
+
+    -- Add usage information
+    table.insert(lines, "")
+    table.insert(lines, "## Keybindings")
+    table.insert(lines, "")
+    table.insert(lines, "- `<CR>` - Inspect variable")
+    table.insert(lines, "- `d` - Delete variable")
+    table.insert(lines, "- `r` - Refresh list")
+    table.insert(lines, "- `q` - Close inspector")
+    table.insert(lines, "")
+    table.insert(lines, string.format("*Last updated: %s*", os.date("%H:%M:%S")))
 
     -- Update buffer content
     api.nvim_buf_set_lines(self.var_inspector.buf, 0, -1, false, lines)
@@ -1466,18 +1488,32 @@ function Neaterm:update_variable_inspector()
     local ns_id = api.nvim_create_namespace('neaterm_inspector')
     api.nvim_buf_clear_namespace(self.var_inspector.buf, ns_id, 0, -1)
 
-    -- Add highlights
-    vim.highlight.range(self.var_inspector.buf, ns_id, 'Title', {0, 0}, {0, -1})
-    vim.highlight.range(self.var_inspector.buf, ns_id, 'Comment', {2, 0}, {2, -1})
-    vim.highlight.range(self.var_inspector.buf, ns_id, 'Special', {3, 0}, {3, -1})
+    -- Add custom highlights for markdown elements
+    local highlights = {
+      { pattern = "^# .*$", hl_group = "Title" },
+      { pattern = "^## .*$", hl_group = "Title" },
+      { pattern = "^%*.*%*$", hl_group = "Comment" },
+      { pattern = "^%*%*.*%*%*$", hl_group = "Special" },
+      { pattern = "`.*`", hl_group = "Special" },
+    }
+
+    for _, highlight in ipairs(highlights) do
+      vim.fn.matchadd(highlight.hl_group, highlight.pattern)
+    end
   end)
 end
 
 function Neaterm:inspect_variable_under_cursor()
   if not self.current_repl then return end
 
+  -- Get the line under cursor
   local line = api.nvim_get_current_line()
-  local var_name = line:match("^([^│]+)"):gsub("%s+$", "")
+  -- Extract variable name from markdown table format
+  local var_name = line:match("|%s*([^|]+)%s*|")
+  if not var_name then return end
+  
+  -- Clean up the variable name
+  var_name = var_name:gsub("^%s*(.-)%s*$", "%1")
   
   local config = self.repl_configs[self.current_repl.filetype]
   if config and config.inspect_variable_cmd then
@@ -1489,8 +1525,14 @@ end
 function Neaterm:delete_variable_under_cursor()
   if not self.current_repl then return end
 
+  -- Get the line under cursor
   local line = api.nvim_get_current_line()
-  local var_name = line:match("^([^│]+)"):gsub("%s+$", "")
+  -- Extract variable name from markdown table format
+  local var_name = line:match("|%s*([^|]+)%s*|")
+  if not var_name then return end
+  
+  -- Clean up the variable name
+  var_name = var_name:gsub("^%s*(.-)%s*$", "%1")
   
   local config = self.repl_configs[self.current_repl.filetype]
   if config and config.delete_variable_cmd then
