@@ -40,7 +40,7 @@ function Neaterm:setup_keymaps()
   local opts = { noremap = true, silent = true }
   local maps = {
     -- Basic terminal operations
-    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,     desc = "Toggle terminal",     mode = { 'n', 't' } },
+    { key = self.opts.keymaps.toggle,           func = function() self:toggle_terminal() end,           desc = "Toggle terminal",           mode = { 'n', 't' } },
     {
       key = self.opts.keymaps.new_vertical,
       func = function() self:create_terminal({ type = 'vertical' }) end,
@@ -107,17 +107,17 @@ function Neaterm:setup_keymaps()
     },
 
     -- REPL operations
-    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,      desc = "Toggle REPL menu",    mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,   desc = "Send line to REPL",   mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end, desc = "Send buffer to REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,          desc = "Clear REPL",          mode = { 'n' } },
-    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,        desc = "Show REPL history",   mode = { 'n' } },
-    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,      desc = "Show REPL variables", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,        desc = "Restart REPL",        mode = { 'n' } },
-    { key = self.opts.keymaps.repl_send_block, func = function() self:send_code_block() end, desc = "Send code block to REPL", mode = { 'n' } },
-    { key = self.opts.keymaps.repl_inspector, func = function() self:create_variable_inspector() end, desc = "Toggle variable inspector", mode = { 'n' } },
+    { key = self.opts.keymaps.repl_toggle,      func = function() self:show_repl_menu() end,            desc = "Toggle REPL menu",          mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_line,   func = function() self:send_line_to_repl() end,         desc = "Send line to REPL",         mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_buffer, func = function() self:send_buffer_to_repl() end,       desc = "Send buffer to REPL",       mode = { 'n' } },
+    { key = self.opts.keymaps.repl_clear,       func = function() self:clear_repl() end,                desc = "Clear REPL",                mode = { 'n' } },
+    { key = self.opts.keymaps.repl_history,     func = function() self:show_history() end,              desc = "Show REPL history",         mode = { 'n' } },
+    { key = self.opts.keymaps.repl_variables,   func = function() self:show_variables() end,            desc = "Show REPL variables",       mode = { 'n' } },
+    { key = self.opts.keymaps.repl_restart,     func = function() self:restart_repl() end,              desc = "Restart REPL",              mode = { 'n' } },
+    { key = self.opts.keymaps.repl_send_block,  func = function() self:send_code_block() end,           desc = "Send code block to REPL",   mode = { 'n' } },
+    { key = self.opts.keymaps.repl_inspector,   func = function() self:create_variable_inspector() end, desc = "Toggle variable inspector", mode = { 'n' } },
     -- Bar operations
-    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,           desc = "Focus bar",           mode = { 'n' } },
+    { key = self.opts.keymaps.focus_bar,        func = function() self:focus_bar() end,                 desc = "Focus bar",                 mode = { 'n' } },
   }
 
   -- Set normal mode mappings
@@ -498,7 +498,7 @@ function Neaterm:get_repl_menu_items(filetype)
     table.insert(items, {
       name = string.format("[Default] %s (Float)", config.name),
       cmd = config.cmd,
-      type = "float",
+      type = config.type or "float",
       filetype = filetype
     })
   end
@@ -1383,8 +1383,8 @@ function Neaterm:create_variable_inspector()
     width = math.floor(vim.o.columns * (self.opts.repl.inspect_width or 0.2)),
     height = math.floor(vim.o.lines * 0.8),
     row = 1,
-    col = self.opts.repl.inspect_position == 'left' and 1 or 
-          (vim.o.columns - math.floor(vim.o.columns * (self.opts.repl.inspect_width or 0.2)) - 1),
+    col = self.opts.repl.inspect_position == 'left' and 1 or
+        (vim.o.columns - math.floor(vim.o.columns * (self.opts.repl.inspect_width or 0.2)) - 1),
     border = self.opts.border,
     title = ' Variable Inspector ',
     title_pos = 'center',
@@ -1491,7 +1491,7 @@ function Neaterm:update_variable_inspector()
         local name = (var.name or ""):gsub("|", "\\|")
         local type = (var.type or ""):gsub("|", "\\|")
         local info = (var.size or var.info or ""):gsub("|", "\\|")
-        
+
         table.insert(lines, string.format("| %s | %s | %s |",
           name,
           type,
@@ -1519,11 +1519,11 @@ function Neaterm:update_variable_inspector()
 
       -- Add custom highlights for markdown elements
       local highlights = {
-        { pattern = "^# .*$", hl_group = "Title" },
-        { pattern = "^## .*$", hl_group = "Title" },
-        { pattern = "^%*.*%*$", hl_group = "Comment" },
+        { pattern = "^# .*$",           hl_group = "Title" },
+        { pattern = "^## .*$",          hl_group = "Title" },
+        { pattern = "^%*.*%*$",         hl_group = "Comment" },
         { pattern = "^%*%*%*.*%*%*%*$", hl_group = "Special" },
-        { pattern = "`.*`", hl_group = "Special" },
+        { pattern = "`.*`",             hl_group = "Special" },
       }
 
       for _, highlight in ipairs(highlights) do
@@ -1544,10 +1544,10 @@ function Neaterm:inspect_variable_under_cursor()
   -- Extract variable name from markdown table format
   local var_name = line:match("|%s*([^|]+)%s*|")
   if not var_name then return end
-  
+
   -- Clean up the variable name
   var_name = var_name:gsub("^%s*(.-)%s*$", "%1")
-  
+
   local config = self.repl_configs[self.current_repl.filetype]
   if config and config.inspect_variable_cmd then
     local cmd = string.format(config.inspect_variable_cmd, var_name)
@@ -1563,10 +1563,10 @@ function Neaterm:delete_variable_under_cursor()
   -- Extract variable name from markdown table format
   local var_name = line:match("|%s*([^|]+)%s*|")
   if not var_name then return end
-  
+
   -- Clean up the variable name
   var_name = var_name:gsub("^%s*(.-)%s*$", "%1")
-  
+
   local config = self.repl_configs[self.current_repl.filetype]
   if config and config.delete_variable_cmd then
     local cmd = string.format(config.delete_variable_cmd, var_name)
@@ -1594,12 +1594,10 @@ function Neaterm:close_variable_inspector()
   end
 end
 
--- Add these new features to the Neaterm class
-
 -- 1. Code Completion in REPL
 function Neaterm:setup_repl_completion()
   if not self.current_repl then return end
-  
+
   local completion_sources = {
     python = {
       get_completions_cmd = "print(__import__('json').dumps([{'word': c, 'kind': 'v'} for c in dir()]))",
@@ -1622,7 +1620,7 @@ function Neaterm:setup_repl_completion()
       local col = vim.api.nvim_win_get_cursor(0)[2]
       return vim.fn.match(line:sub(1, col), [[\k*$]])
     end
-    
+
     local source = completion_sources[self.current_repl.filetype]
     if not source then return {} end
 
@@ -1655,7 +1653,7 @@ function Neaterm:setup_plot_viewer()
   }
 
   self.plot_viewer.win = vim.api.nvim_open_win(self.plot_viewer.buf, false, win_opts)
-  
+
   -- Setup plot handlers for different REPLs
   local plot_handlers = {
     python = {
@@ -1781,7 +1779,7 @@ function Neaterm:setup_package_manager()
   -- Add package management UI
   function self:show_package_manager()
     if not self.current_repl then return end
-    
+
     local cmd = package_commands[self.current_repl.filetype]
     if not cmd then return end
 
@@ -1831,7 +1829,7 @@ function Neaterm:setup_snippets()
   -- Add snippet expansion
   function self:expand_snippet(trigger)
     if not self.current_repl then return end
-    
+
     local snippets = self.snippets[self.current_repl.filetype]
     if not snippets or not snippets[trigger] then return end
 
@@ -1856,7 +1854,7 @@ function Neaterm:setup_doc_viewer()
 
   function self:show_documentation(object)
     if not self.current_repl then return end
-    
+
     local cmd = doc_commands[self.current_repl.filetype]
     if not cmd then return end
 
@@ -1881,9 +1879,6 @@ end
 
 -- Update the setup function to initialize these features
 function Neaterm:setup(opts)
-  -- ... existing setup code ...
-
-  -- Initialize new features
   self:setup_repl_completion()
   self:setup_plot_viewer()
   self:setup_debug_integration()

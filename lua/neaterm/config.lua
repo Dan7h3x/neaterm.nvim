@@ -90,8 +90,8 @@ local default_opts = {
     repl_send_line = '<leader>rl',
     repl_send_selection = '<leader>rs',
     repl_send_buffer = '<leader>rb',
-    repl_send_block = '<leader>sb',  -- Send current code block
-    repl_inspector = '<leader>si',    -- Toggle variable inspector
+    repl_send_block = '<leader>sb', -- Send current code block
+    repl_inspector = '<leader>si',  -- Toggle variable inspector
 
     repl_clear = '<leader>rc',
     repl_history = '<leader>rh',
@@ -107,10 +107,10 @@ local default_opts = {
     history_file = vim.fn.stdpath('data') .. '/neaterm_repl_history.json',
     max_history = 100,
     update_interval = 5000,
-    auto_inspect = true,              -- Automatically open inspector for new REPLs
-    inspect_interval = 1000,          -- Update interval in milliseconds
-    inspect_position = 'right',       -- Where to show the inspector (left/right)
-    inspect_width = 0.2,              -- Width of the inspector window (0-1)
+    auto_inspect = true,        -- Automatically open inspector for new REPLs
+    inspect_interval = 1000,    -- Update interval in milliseconds
+    inspect_position = 'right', -- Where to show the inspector (left/right)
+    inspect_width = 0.2,        -- Width of the inspector window (0-1)
   },
 
   -- REPL language configurations
@@ -251,34 +251,5 @@ function M.setup(user_opts)
 
   return opts
 end
-
--- Configuration for lazy.nvim
-M.lazy = {
-  'Dan7h3x/neaterm.nvim',
-  event = 'VeryLazy',
-  keys = {
-    { '<A-t>',      desc = 'Toggle terminal' },
-    { '<C-\\>',     desc = 'New vertical terminal' },
-    { '<C-.>',      desc = 'New horizontal terminal' },
-    { '<C-A-t>',    desc = 'New floating terminal' },
-    { '<leader>rt', desc = 'Toggle REPL menu' },
-    { '<leader>rl', desc = 'Send line to REPL' },
-    { '<leader>rs', mode = 'v',                      desc = 'Send selection to REPL' },
-    { '<leader>rb', desc = 'Send buffer to REPL' },
-  },
-  opts = {
-    -- User can override default options here
-    -- Example:
-    -- float_width = 0.7,
-    -- float_height = 0.5,
-  },
-  config = function(_, opts)
-    require('neaterm').setup(opts)
-  end,
-  dependencies = {
-    'nvim-lua/plenary.nvim',
-    'ibhagwan/fzf-lua',
-  },
-}
 
 return M

@@ -7,12 +7,16 @@ function M.setup(user_opts)
   local opts = config.setup(user_opts)
   local neaterm = Neaterm.new(opts)
 
-  -- Initialize REPL functionality
   neaterm:setup_repl()
-  -- Setup terminal functionality
   neaterm:setup_terminal()
-  -- Setup keymaps
   neaterm:setup_keymaps()
+  neaterm:setup_repl_completion()
+  neaterm:setup_plot_viewer()
+  neaterm:setup_debug_integration()
+  neaterm:setup_workspace_management()
+  neaterm:setup_package_manager()
+  neaterm:setup_snippets()
+  neaterm:setup_doc_viewer()
 
   return neaterm
 end
