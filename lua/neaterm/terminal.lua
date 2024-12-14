@@ -249,15 +249,6 @@ function Neaterm:setup_keymaps()
 			desc = "Focus bar",
 			mode = { "n" },
 		},
-
-		{
-			key = self.opts.keymaps.debug_integration,
-			func = function()
-				self:setup_debug_integration()
-			end,
-			desc = "debugging",
-			mode = { "n" },
-		},
 	}
 
 	-- Set normal mode mappings
