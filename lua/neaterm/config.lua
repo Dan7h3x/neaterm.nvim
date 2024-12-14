@@ -95,9 +95,6 @@ local default_opts = {
 		repl_history = "<leader>rh",
 		repl_variables = "<leader>rv",
 		repl_restart = "<leader>rR",
-		doc_viewer = "<leader>rd",
-		plot_viewer = "<leader>rp",
-		debug_integration = "<leader>rD",
 	},
 
 	-- REPL configurations
