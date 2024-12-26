@@ -529,41 +529,35 @@ function Neaterm:save_repl_history()
 end
 
 -- Text Sending Methods
-function Neaterm:send_text(text)
-	if not text then
-		return
-	end
-
+function Neaterm:send_text(text, opts)
+	opts = opts or {}
 	local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
 	if not term_buf or not self.terminals[term_buf] then
 		vim.notify("No active terminal", vim.log.levels.WARN)
-		return
+		return false
 	end
 
 	local term = self.terminals[term_buf]
 	if not term or not term.job_id then
-		return
+		return false
 	end
 
-	-- Check if job is still valid
-	local valid_job = vim.fn.jobwait({ term.job_id }, 0)[1] == -1
-	if not valid_job then
+	-- Check job validity
+	if vim.fn.jobwait({ term.job_id }, 0)[1] ~= -1 then
 		vim.notify("Terminal job is no longer valid", vim.log.levels.WARN)
-		return
+		return false
 	end
 
-	local formatted_text = tostring(text)
-	if not formatted_text:match("\n$") then
-		formatted_text = formatted_text .. "\n"
+	-- Use efficient batch sending
+	local success = utils.batch_send_text(term.job_id, text)
+
+	-- Handle history
+	if success and opts.add_to_history and self.current_repl then
+		self:add_to_history(text, self.current_repl.filetype)
 	end
 
-	-- Safely send text to terminal
-	local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
-	if not success then
-		vim.notify("Failed to send text: " .. err, vim.log.levels.ERROR)
-	end
+	return success
 end
-
 function Neaterm:send_line_to_repl()
 	if not self.current_repl then
 		vim.notify("No active REPL", vim.log.levels.WARN)
@@ -1134,21 +1128,18 @@ function Neaterm:resize_terminal(direction)
 	end
 end
 
--- Add these methods to the Neaterm class
-
--- Send buffer content to REPL
 function Neaterm:send_buffer_to_repl()
 	if not self.current_repl then
 		vim.notify("No active REPL", vim.log.levels.WARN)
 		return
 	end
 
+	-- Get buffer content efficiently
 	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
 	local text = table.concat(lines, "\n")
 
 	if text ~= "" then
-		self:add_to_history(text, self.current_repl.filetype)
-		self:send_text(text)
+		self:send_text(text, { add_to_history = true })
 	end
 end
 
@@ -1161,8 +1152,7 @@ function Neaterm:send_selection_to_repl()
 
 	local text = utils.get_visual_selection()
 	if text ~= "" then
-		self:add_to_history(text, self.current_repl.filetype)
-		self:send_text(text)
+		self:send_text(text, { add_to_history = true })
 	end
 end
 
@@ -1491,32 +1481,9 @@ function Neaterm:send_code_block()
 		return
 	end
 
-	local current_line = vim.fn.line(".")
-	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-	local block_start, block_end = current_line, current_line
-
-	-- Search backwards for block start
-	for i = current_line - 1, 1, -1 do
-		if lines[i]:match("^%s*$") then
-			block_start = i + 1
-			break
-		end
-		block_start = i
-	end
-
-	-- Search forwards for block end
-	for i = current_line + 1, #lines do
-		if lines[i]:match("^%s*$") then
-			block_end = i - 1
-			break
-		end
-		block_end = i
-	end
-
-	local block = table.concat(lines, "\n", block_start, block_end)
+	local block = utils.get_code_block()
 	if block ~= "" then
-		self:add_to_history(block, self.current_repl.filetype)
-		self:send_text(block)
+		self:send_text(block, { add_to_history = true })
 	end
 end
 
@@ -1762,6 +1729,108 @@ function Neaterm:close_variable_inspector()
 			api.nvim_buf_delete(self.var_inspector.buf, { force = true })
 		end
 		self.var_inspector = nil
+	end
+end
+
+-- Add to Neaterm class
+function Neaterm:setup_terminal_features()
+	-- Terminal multiplexer features
+	self.panes = {}
+	self.layouts = {}
+
+	-- Add terminal features
+	self.features = {
+		multiplexer = true,
+		search = true,
+		scrollback = true,
+		url_handler = true,
+	}
+
+	if self.features.search then
+		self:setup_terminal_search()
+	end
+
+	if self.features.url_handler then
+		self:setup_url_handler()
+	end
+end
+
+function Neaterm:setup_terminal_search()
+	-- Add incremental search in terminal buffer
+	vim.keymap.set("t", "<C-/>", function()
+		self:start_terminal_search()
+	end, { silent = true })
+end
+
+function Neaterm:start_terminal_search()
+	local term = self.terminals[self.current_terminal]
+	if not term then
+		return
+	end
+
+	-- Create search UI
+	local buf = vim.api.nvim_create_buf(false, true)
+	local win = vim.api.nvim_open_win(buf, true, {
+		relative = "editor",
+		width = 30,
+		height = 1,
+		row = 1,
+		col = vim.o.columns - 31,
+		style = "minimal",
+		border = "single",
+	})
+
+	-- Setup search logic
+	vim.api.nvim_buf_set_option(buf, "buftype", "prompt")
+	vim.fn.prompt_setprompt(buf, "Search: ")
+
+	-- Handle search input
+	vim.keymap.set("i", "<CR>", function()
+		local query = vim.fn.getline(".")
+		self:search_terminal(query)
+		vim.api.nvim_win_close(win, true)
+	end, { buffer = buf })
+end
+
+function Neaterm:setup_url_handler()
+	-- Detect and handle URLs in terminal
+	vim.api.nvim_create_autocmd("TextChanged", {
+		pattern = "term://*",
+		callback = function()
+			self:highlight_urls()
+		end,
+	})
+end
+
+function Neaterm:highlight_urls()
+	local term = self.terminals[self.current_terminal]
+	if not term then
+		return
+	end
+
+	-- Create highlight group for URLs
+	vim.api.nvim_set_hl(0, "TermURL", { underline = true, special = "Blue" })
+
+	-- Find and highlight URLs
+	local content = vim.api.nvim_buf_get_lines(term.buf, 0, -1, false)
+	local urls = {}
+
+	for i, line in ipairs(content) do
+		for url in line:gmatch("https?://[%w-_%.%?%.:/%+=&]+") do
+			table.insert(urls, {
+				line = i - 1,
+				col_start = line:find(url) - 1,
+				col_end = line:find(url) + #url - 1,
+			})
+		end
+	end
+
+	-- Apply highlights
+	local ns_id = vim.api.nvim_create_namespace("terminal_urls")
+	vim.api.nvim_buf_clear_namespace(term.buf, ns_id, 0, -1)
+
+	for _, url in ipairs(urls) do
+		vim.api.nvim_buf_add_highlight(term.buf, ns_id, "TermURL", url.line, url.col_start, url.col_end)
 	end
 end
 
