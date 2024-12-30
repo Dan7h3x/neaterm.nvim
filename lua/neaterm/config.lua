@@ -24,7 +24,7 @@ local default_opts = {
 		max_height = 50,
 		offset_x = 2,
 		offset_y = 1,
-	  },
+	},
 
 	-- Window management
 	min_width = 20,
@@ -81,6 +81,7 @@ local default_opts = {
 		new_vertical = "<C-\\>",
 		new_horizontal = "<C-.>",
 		new_float = "<C-A-t>",
+		terminal_picker = "<C-A-p>",
 		close = "<A-d>",
 		next = "<C-PageDown>",
 		prev = "<C-PageUp>",

@@ -1583,7 +1583,7 @@ function Neaterm:setup_features()
 		self:show_terminal_picker()
 	end, {
 		silent = true,
-		desc = self.opts.keymaps.terminal_picker.desc,
+		desc = "Terminal Picker",
 	})
 end
 
