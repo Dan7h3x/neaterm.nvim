@@ -308,8 +308,6 @@ function Neaterm:_create_new_terminal(opts)
 	pcall(api.nvim_buf_set_option, buf, "swapfile", false)
 	pcall(api.nvim_buf_set_option, buf, "modifiable", true)
 
-
-
 	-- Create window with error handling
 	local win = utils.create_window(self.opts, opts, buf)
 	if not win then
@@ -1169,20 +1167,20 @@ end
 -- 	end
 -- end
 function Neaterm:send_buffer_to_repl()
-  if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
-    return
-  end
+	if not self.current_repl then
+		vim.notify("No active REPL", vim.log.levels.WARN)
+		return
+	end
 
-  -- Get buffer content as single string
-  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-  local text = table.concat(lines, "\n")
-  
-  -- Send using bracketed paste
-  local term = self.terminals[self.current_repl.buf]
-  if term and term.job_id then
-    utils.batch_send_text(term.job_id, text)
-  end
+	-- Get buffer content as single string
+	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+	local text = table.concat(lines, "\n")
+
+	-- Send using bracketed paste
+	local term = self.terminals[self.current_repl.buf]
+	if term and term.job_id then
+		utils.batch_send_text(term.job_id, text)
+	end
 end
 -- Send selection to REPL
 function Neaterm:send_selection_to_repl()
@@ -1457,81 +1455,79 @@ function Neaterm:update_float_position(win, changes)
 	api.nvim_win_set_config(win, new_config)
 end
 
-
 -- Add to terminal.lua
-function Neaterm:setup_advanced_features()
-  -- Terminal multiplexer features
-  self.features = {
-    -- Terminal features
-    search = {
-      enabled = true,
-      highlight = true,
-      incremental = true,
-    },
-    
-    -- Terminal splitting
-    splits = {
-      enabled = true,
-      layouts = {
-        horizontal = true,
-        vertical = true,
-        grid = true,
-      },
-    },
-    
-    -- Command palette
-    command_palette = {
-      enabled = true,
-      history = true,
-    },
-    
-    -- Terminal tabs
-    tabs = {
-      enabled = true,
-      show_numbers = true,
-      style = "minimal",
-    },
-    
-    -- Terminal status line
-    status = {
-      enabled = true,
-      components = {
-        mode = true,
-        name = true,
-        cwd = true,
-        git = true,
-      },
-    },
-    
-    -- Terminal themes
-    themes = {
-      enabled = true,
-      current = "default",
-    },
-  }
-  
-  -- Setup features based on config
-  if self.features.search.enabled then
-    self:setup_terminal_search()
-  end
-  
-  if self.features.splits.enabled then
-    self:setup_terminal_splits()
-  end
-  
-  if self.features.command_palette.enabled then
-    self:setup_command_palette()
-  end
-  
-  if self.features.tabs.enabled then
-    self:setup_terminal_tabs()
-  end
-  
-  if self.features.status.enabled then
-    self:setup_terminal_status()
-  end
-end
-
+-- function Neaterm:setup_advanced_features()
+-- 	-- Terminal multiplexer features
+-- 	self.features = {
+-- 		-- Terminal features
+-- 		search = {
+-- 			enabled = true,
+-- 			highlight = true,
+-- 			incremental = true,
+-- 		},
+--
+-- 		-- Terminal splitting
+-- 		splits = {
+-- 			enabled = true,
+-- 			layouts = {
+-- 				horizontal = true,
+-- 				vertical = true,
+-- 				grid = true,
+-- 			},
+-- 		},
+--
+-- 		-- Command palette
+-- 		command_palette = {
+-- 			enabled = true,
+-- 			history = true,
+-- 		},
+--
+-- 		-- Terminal tabs
+-- 		tabs = {
+-- 			enabled = true,
+-- 			show_numbers = true,
+-- 			style = "minimal",
+-- 		},
+--
+-- 		-- Terminal status line
+-- 		status = {
+-- 			enabled = true,
+-- 			components = {
+-- 				mode = true,
+-- 				name = true,
+-- 				cwd = true,
+-- 				git = true,
+-- 			},
+-- 		},
+--
+-- 		-- Terminal themes
+-- 		themes = {
+-- 			enabled = true,
+-- 			current = "default",
+-- 		},
+-- 	}
+--
+-- 	-- Setup features based on config
+-- 	if self.features.search.enabled then
+-- 		self:setup_terminal_search()
+-- 	end
+--
+-- 	-- if self.features.splits.enabled then
+-- 	--   self:setup_terminal_splits()
+-- 	-- end
+--
+-- 	if self.features.command_palette.enabled then
+-- 		self:setup_command_palette()
+-- 	end
+--
+-- 	if self.features.tabs.enabled then
+-- 		self:setup_terminal_tabs()
+-- 	end
+--
+-- 	if self.features.status.enabled then
+-- 		self:setup_terminal_status()
+-- 	end
+-- end
 
 -- Add new features
 function Neaterm:setup_features()
