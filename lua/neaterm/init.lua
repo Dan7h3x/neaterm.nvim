@@ -10,9 +10,7 @@ function M.setup(user_opts)
 	neaterm:setup_repl()
 	neaterm:setup_terminal()
 	neaterm:setup_keymaps()
-	-- neaterm:setup_advanced_features()
 
-	neaterm:setup_features()
 	return neaterm
 end
 
