@@ -17,6 +17,15 @@ local default_opts = {
 		title = "Title",
 	},
 
+	image_preview = {
+		enabled = true,
+		backend = "kitty", -- or "ueberzug"
+		max_width = 100,
+		max_height = 50,
+		offset_x = 2,
+		offset_y = 1,
+	  },
+
 	-- Window management
 	min_width = 20,
 	min_height = 3,

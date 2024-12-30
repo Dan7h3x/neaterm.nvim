@@ -266,12 +266,34 @@ end
 function Neaterm:create_terminal(opts)
 	opts = opts or {}
 
+	if self.current_terminal then
+		-- Store current window to restore focus later
+		local current_win = api.nvim_get_current_win()
+
+		-- Close existing terminal properly
+		self:safe_close_terminal(self.current_terminal)
+
+		-- Wait for cleanup
+		vim.defer_fn(function()
+			-- Create new terminal
+			self:_create_new_terminal(opts)
+			-- Restore focus
+			if api.nvim_win_is_valid(current_win) then
+				api.nvim_set_current_win(current_win)
+			end
+		end, 10)
+		return
+	end
+
+	self:_create_new_terminal(opts)
 	-- Validate terminal configuration
+end
+
+function Neaterm:_create_new_terminal(opts)
 	if opts.cmd and type(opts.cmd) ~= "string" then
 		vim.notify("Terminal command must be a string", vim.log.levels.ERROR)
 		return nil
 	end
-
 	-- Create buffer with error handling
 	local ok, buf = pcall(api.nvim_create_buf, false, true)
 	if not ok then
@@ -283,6 +305,10 @@ function Neaterm:create_terminal(opts)
 	pcall(api.nvim_buf_set_option, buf, "filetype", "neaterm")
 	pcall(api.nvim_buf_set_option, buf, "bufhidden", "wipe")
 	pcall(api.nvim_buf_set_option, buf, "buflisted", false)
+	pcall(api.nvim_buf_set_option, buf, "swapfile", false)
+	pcall(api.nvim_buf_set_option, buf, "modifiable", true)
+
+
 
 	-- Create window with error handling
 	local win = utils.create_window(self.opts, opts, buf)
@@ -1128,21 +1154,36 @@ function Neaterm:resize_terminal(direction)
 	end
 end
 
+-- function Neaterm:send_buffer_to_repl()
+-- 	if not self.current_repl then
+-- 		vim.notify("No active REPL", vim.log.levels.WARN)
+-- 		return
+-- 	end
+
+-- 	-- Get buffer content efficiently
+-- 	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+-- 	local text = table.concat(lines, "\n")
+
+-- 	if text ~= "" then
+-- 		self:send_text(text, { add_to_history = true })
+-- 	end
+-- end
 function Neaterm:send_buffer_to_repl()
-	if not self.current_repl then
-		vim.notify("No active REPL", vim.log.levels.WARN)
-		return
-	end
+  if not self.current_repl then
+    vim.notify("No active REPL", vim.log.levels.WARN)
+    return
+  end
 
-	-- Get buffer content efficiently
-	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-	local text = table.concat(lines, "\n")
-
-	if text ~= "" then
-		self:send_text(text, { add_to_history = true })
-	end
+  -- Get buffer content as single string
+  local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+  local text = table.concat(lines, "\n")
+  
+  -- Send using bracketed paste
+  local term = self.terminals[self.current_repl.buf]
+  if term and term.job_id then
+    utils.batch_send_text(term.job_id, text)
+  end
 end
-
 -- Send selection to REPL
 function Neaterm:send_selection_to_repl()
 	if not self.current_repl then
@@ -1415,6 +1456,82 @@ function Neaterm:update_float_position(win, changes)
 
 	api.nvim_win_set_config(win, new_config)
 end
+
+
+-- Add to terminal.lua
+function Neaterm:setup_advanced_features()
+  -- Terminal multiplexer features
+  self.features = {
+    -- Terminal features
+    search = {
+      enabled = true,
+      highlight = true,
+      incremental = true,
+    },
+    
+    -- Terminal splitting
+    splits = {
+      enabled = true,
+      layouts = {
+        horizontal = true,
+        vertical = true,
+        grid = true,
+      },
+    },
+    
+    -- Command palette
+    command_palette = {
+      enabled = true,
+      history = true,
+    },
+    
+    -- Terminal tabs
+    tabs = {
+      enabled = true,
+      show_numbers = true,
+      style = "minimal",
+    },
+    
+    -- Terminal status line
+    status = {
+      enabled = true,
+      components = {
+        mode = true,
+        name = true,
+        cwd = true,
+        git = true,
+      },
+    },
+    
+    -- Terminal themes
+    themes = {
+      enabled = true,
+      current = "default",
+    },
+  }
+  
+  -- Setup features based on config
+  if self.features.search.enabled then
+    self:setup_terminal_search()
+  end
+  
+  if self.features.splits.enabled then
+    self:setup_terminal_splits()
+  end
+  
+  if self.features.command_palette.enabled then
+    self:setup_command_palette()
+  end
+  
+  if self.features.tabs.enabled then
+    self:setup_terminal_tabs()
+  end
+  
+  if self.features.status.enabled then
+    self:setup_terminal_status()
+  end
+end
+
 
 -- Add new features
 function Neaterm:setup_features()
