@@ -266,30 +266,6 @@ end
 function Neaterm:create_terminal(opts)
 	opts = opts or {}
 
-	if self.current_terminal then
-		-- Store current window to restore focus later
-		local current_win = api.nvim_get_current_win()
-
-		-- Close existing terminal properly
-		self:safe_close_terminal(self.current_terminal)
-
-		-- Wait for cleanup
-		vim.defer_fn(function()
-			-- Create new terminal
-			self:_create_new_terminal(opts)
-			-- Restore focus
-			if api.nvim_win_is_valid(current_win) then
-				api.nvim_set_current_win(current_win)
-			end
-		end, 10)
-		return
-	end
-
-	self:_create_new_terminal(opts)
-	-- Validate terminal configuration
-end
-
-function Neaterm:_create_new_terminal(opts)
 	if opts.cmd and type(opts.cmd) ~= "string" then
 		vim.notify("Terminal command must be a string", vim.log.levels.ERROR)
 		return nil
@@ -390,6 +366,8 @@ function Neaterm:_create_new_terminal(opts)
 	end)
 
 	return buf
+
+	-- Validate terminal configuration
 end
 
 -- Add validation for terminal settings
