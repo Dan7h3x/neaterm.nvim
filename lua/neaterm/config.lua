@@ -17,23 +17,6 @@ local default_opts = {
 		title = "Title",
 	},
 
-	image_preview = {
-        enabled = true,
-        backend = "ueberzugpp", -- or "chafa"
-        max_width = 100,
-        max_height = 50,
-        offset_x = 2,
-        offset_y = 1,
-        file_patterns = {
-            "%.png$",
-            "%.jpg$",
-            "%.jpeg$",
-            "%.gif$",
-            "%.bmp$",
-            "%.webp$"
-        }
-    },
-
 	-- Window management
 	min_width = 20,
 	min_height = 3,
@@ -89,7 +72,6 @@ local default_opts = {
 		new_vertical = "<C-\\>",
 		new_horizontal = "<C-.>",
 		new_float = "<C-A-t>",
-		terminal_picker = "<C-A-p>",
 		close = "<A-d>",
 		next = "<C-PageDown>",
 		prev = "<C-PageUp>",
@@ -134,7 +116,6 @@ local default_opts = {
 		python = {
 			name = "Python (IPython)",
 			cmd = "ipython --no-autoindent --colors='Linux'",
-			paste_cmd = "%paste",
 			startup_cmds = {
 				-- "import sys",
 				-- "sys.ps1 = 'In []: '",
@@ -147,8 +128,6 @@ local default_opts = {
 		r = {
 			name = "R (Radian)",
 			cmd = "radian",
-			paste_cmd = "source(textConnection(readClipboard()))",
-
 			startup_cmds = {
 				-- "options(width = 80)",
 				-- "options(prompt = 'R> ')",
@@ -157,22 +136,15 @@ local default_opts = {
 			inspect_variable_cmd = "str(",
 			exit_cmd = "q(save='no')",
 		},
-		julia = {
-			name = "Julia",
-			cmd = "julia",
-			paste_cmd = "]paste\n%s\n^D",  -- Julia's paste mode
-		},
 		lua = {
 			name = "Lua",
 			cmd = "lua",
-			paste_cmd = "load([[\n%s\n]])()",  -- Load multi-line code
 			exit_cmd = "os.exit()",
 		},
 		node = {
 			name = "Node.js",
 			cmd = "node",
 			get_variables_cmd = "Object.keys(global)",
-			paste_cmd = ".editor\n%s\n^D",  -- Node REPL editor mode
 			exit_cmd = ".exit",
 		},
 		sh = {

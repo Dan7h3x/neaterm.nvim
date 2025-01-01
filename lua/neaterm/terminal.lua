@@ -265,68 +265,105 @@ end
 -- Terminal Management Methods
 function Neaterm:create_terminal(opts)
 	opts = opts or {}
-	
-	-- Validate terminal options
-	if not self:validate_terminal_opts(opts) then
+
+	-- Validate terminal configuration
+	if opts.cmd and type(opts.cmd) ~= "string" then
+		vim.notify("Terminal command must be a string", vim.log.levels.ERROR)
 		return nil
 	end
 
-	-- Create buffer with improved options
-	local buf = api.nvim_create_buf(false, true)
-	if not buf then return nil end
-
-	-- Set improved buffer options
-	local buf_opts = {
-		bufhidden = "wipe",
-		buflisted = false,
-		swapfile = false,
-		modifiable = true,
-		filetype = "neaterm"
-	}
-	
-	for opt, val in pairs(buf_opts) do
-		vim.api.nvim_buf_set_option(buf, opt, val)
+	-- Create buffer with error handling
+	local ok, buf = pcall(api.nvim_create_buf, false, true)
+	if not ok then
+		vim.notify("Failed to create terminal buffer: " .. buf, vim.log.levels.ERROR)
+		return nil
 	end
 
-	-- Create window with smart positioning
-	local win = self:create_smart_window(opts, buf)
+	-- Set buffer options safely
+	pcall(api.nvim_buf_set_option, buf, "filetype", "neaterm")
+	pcall(api.nvim_buf_set_option, buf, "bufhidden", "wipe")
+	pcall(api.nvim_buf_set_option, buf, "buflisted", false)
+
+	-- Create window with error handling
+	local win = utils.create_window(self.opts, opts, buf)
 	if not win then
-		api.nvim_buf_delete(buf, { force = true })
+		pcall(api.nvim_buf_delete, buf, { force = true })
+		vim.notify("Failed to create terminal window", vim.log.levels.ERROR)
 		return nil
 	end
 
-	-- Start terminal with improved error handling
-	local ok, term_id = pcall(vim.fn.termopen, opts.cmd or self.opts.shell, {
+	-- Start terminal with error handling
+	local term_id = fn.termopen(opts.cmd or self.opts.shell, {
 		on_exit = function(_, code)
 			vim.schedule(function()
-				self:handle_terminal_exit(buf, code)
+				-- Handle terminal exit
+				if api.nvim_buf_is_valid(buf) then
+					-- Execute custom on_exit handler if provided
+					if opts.on_exit then
+						local success, err = pcall(opts.on_exit, code)
+						if not success then
+							vim.notify("Terminal exit handler failed: " .. err, vim.log.levels.ERROR)
+						end
+					end
+
+					-- Cleanup terminal
+					self.terminals[buf] = nil
+					if self.current_terminal == buf then
+						self.current_terminal = nil
+					end
+					if self.current_repl and self.current_repl.buf == buf then
+						self.current_repl = nil
+					end
+
+					-- Close window safely
+					if win and api.nvim_win_is_valid(win) then
+						pcall(api.nvim_win_close, win, true)
+					end
+
+					-- Delete buffer safely
+					pcall(api.nvim_buf_delete, buf, { force = true })
+				end
+
+				-- Update UI
+				ui.update_bar(self)
 			end)
 		end,
-		env = self:get_terminal_env()
 	})
 
-	if not ok or term_id <= 0 then
-		self:cleanup_terminal(buf)
-		vim.notify("Failed to create terminal", vim.log.levels.ERROR)
+	if term_id <= 0 then
+		pcall(api.nvim_buf_delete, buf, { force = true })
+		vim.notify("Failed to create terminal: Command not found or failed to start", vim.log.levels.ERROR)
 		return nil
 	end
 
-	-- Store terminal info
-	self.terminals[buf] = {
+	-- Store terminal info with validation
+	local terminal_info = {
 		window = win,
 		job_id = term_id,
 		type = opts.type,
-		cmd = opts.cmd,
+		cmd = opts.cmd or self.opts.shell,
 		keymaps = opts.keymaps,
-		created_at = os.time()
 	}
+	self.terminals[buf] = terminal_info
 
-	-- Setup terminal settings
-	self:setup_terminal_settings(win, buf, self.terminals[buf])
-	
-	-- Set as current and update UI
+	-- Setup terminal settings safely
+	local setup_ok, setup_err = pcall(self.setup_terminal_settings, self, win, buf, terminal_info)
+	if not setup_ok then
+		vim.notify("Failed to setup terminal settings: " .. setup_err, vim.log.levels.WARN)
+	end
+
+	-- Set as current terminal
 	self.current_terminal = buf
-	self:update_ui()
+
+	-- Update UI safely
+	pcall(ui.update_bar, self)
+
+	-- Enter insert mode safely
+	vim.schedule(function()
+		if api.nvim_buf_is_valid(buf) then
+			vim.cmd("startinsert")
+		end
+	end)
 
 	return buf
 end
@@ -492,33 +529,39 @@ function Neaterm:save_repl_history()
 end
 
 -- Text Sending Methods
-function Neaterm:send_text(text, opts)
-	opts = opts or {}
-	if not self.current_repl or not self.current_repl.job_id then
-		vim.notify("No active REPL job", vim.log.levels.WARN)
-		return false
+function Neaterm:send_text(text)
+	if not text then
+		return
 	end
 
-	-- Handle different line endings
-	text = text:gsub("\r\n", "\n")
-	if not text:match("\n$") and not opts.raw then
-		text = text .. "\n"
+	local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
+	if not term_buf or not self.terminals[term_buf] then
+		vim.notify("No active terminal", vim.log.levels.WARN)
+		return
 	end
 
-	-- Use bracketed paste mode if requested
-	if opts.use_bracketed_paste and not opts.raw then
-		text = string.format("\x1b[200~%s\x1b[201~", text)
+	local term = self.terminals[term_buf]
+	if not term or not term.job_id then
+		return
 	end
 
-	-- Send text to terminal
-	local success = pcall(vim.fn.chansend, self.current_repl.job_id, text)
-
-	-- Add to history if requested and successful
-	if success and opts.add_to_history then
-		self:add_to_history(text, self.current_repl.filetype)
+	-- Check if job is still valid
+	local valid_job = vim.fn.jobwait({ term.job_id }, 0)[1] == -1
+	if not valid_job then
+		vim.notify("Terminal job is no longer valid", vim.log.levels.WARN)
+		return
 	end
 
-	return success
+	local formatted_text = tostring(text)
+	if not formatted_text:match("\n$") then
+		formatted_text = formatted_text .. "\n"
+	end
+
+	-- Safely send text to terminal
+	local success, err = pcall(api.nvim_chan_send, term.job_id, formatted_text)
+	if not success then
+		vim.notify("Failed to send text: " .. err, vim.log.levels.ERROR)
+	end
 end
 
 function Neaterm:send_line_to_repl()
@@ -911,6 +954,90 @@ function Neaterm:safe_close_repl()
 	end, 100)
 end
 
+-- Add this method to the Neaterm class
+-- function Neaterm:setup_terminal_settings(win, buf)
+--   -- Window-specific settings
+--   local win_opts = {
+--     number = false,
+--     relativenumber = false,
+--     signcolumn = "no",
+--     wrap = false,
+--   }
+--
+--   for opt, value in pairs(win_opts) do
+--     api.nvim_win_set_option(win, opt, value)
+--   end
+--
+--   -- Buffer-specific settings
+--   local buf_opts = {
+--     bufhidden = "hide",
+--     filetype = "neaterm",
+--     buflisted = false,
+--   }
+--
+--   for opt, value in pairs(buf_opts) do
+--     api.nvim_buf_set_option(buf, opt, value)
+--   end
+--
+--   -- Terminal-specific keymaps with descriptions
+--   local term_maps = {
+--     ['<ESC><ESC>'] = {
+--       cmd = '<C-\\><C-n>',
+--       desc = 'Exit terminal insert mode'
+--     },
+--     ['<C-\\><C-n>'] = {
+--       cmd = '<Cmd>startinsert<CR>',
+--       desc = 'Enter terminal insert mode'
+--     },
+--     ['<C-h>'] = {
+--       cmd = '<Cmd>wincmd h<CR>',
+--       desc = 'Move to left window'
+--     },
+--     ['<C-j>'] = {
+--       cmd = '<Cmd>wincmd j<CR>',
+--       desc = 'Move to bottom window'
+--     },
+--     ['<C-k>'] = {
+--       cmd = '<Cmd>wincmd k<CR>',
+--       desc = 'Move to top window'
+--     },
+--     ['<C-l>'] = {
+--       cmd = '<Cmd>wincmd l<CR>',
+--       desc = 'Move to right window'
+--     },
+--     ['<C-w>'] = {
+--       cmd = '<C-\\><C-n><C-w>',
+--       desc = 'Window command prefix'
+--     }
+--   }
+--
+--   for lhs, map in pairs(term_maps) do
+--     vim.keymap.set('t', lhs, map.cmd, {
+--       buffer = buf,
+--       silent = true,
+--       desc = map.desc
+--     })
+--   end
+--
+--   -- Add new features
+--   -- Auto-resize on terminal window focus
+--   api.nvim_create_autocmd("WinEnter", {
+--     buffer = buf,
+--     callback = function()
+--       if vim.bo[buf].buftype == 'terminal' then
+--         vim.cmd('startinsert')
+--       end
+--     end,
+--     desc = "Auto-enter insert mode in terminal"
+--   })
+--
+--   -- Add terminal title
+--   -- if term.cmd then
+--   --   local title = term.cmd:match("([^/]+)$") or "terminal"
+--   --   api.nvim_buf_set_name(buf, string.format("term://%s", title))
+--   -- end
+-- end
+
 -- Add navigation methods
 function Neaterm:next_terminal()
 	local terminals = vim.tbl_keys(self.terminals)
@@ -1007,175 +1134,25 @@ function Neaterm:resize_terminal(direction)
 	end
 end
 
--- Add these helper functions for REPL interaction
+-- Add these methods to the Neaterm class
+
+-- Send buffer content to REPL
 function Neaterm:send_buffer_to_repl()
-    if not self.current_repl then
-        vim.notify("No active REPL", vim.log.levels.WARN)
-        return
-    end
+	if not self.current_repl then
+		vim.notify("No active REPL", vim.log.levels.WARN)
+		return
+	end
 
-    -- Store current position
-    local current_win = api.nvim_get_current_win()
-    local current_pos = api.nvim_win_get_cursor(current_win)
+	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+	local text = table.concat(lines, "\n")
 
-    -- Get buffer content efficiently
-    local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-    local text = table.concat(lines, "\n")
-    
-    -- Skip if empty
-    if text == "" then return end
-
-    -- Get REPL config
-    local config = self.repl_configs[self.current_repl.filetype]
-    if not config then 
-        vim.notify("No REPL config found for " .. self.current_repl.filetype, vim.log.levels.WARN)
-        return 
-    end
-
-    -- Copy to clipboard and send using paste command
-    local old_clipboard = vim.fn.getreg('+')
-    vim.fn.setreg('+', text)
-
-    -- Use filetype-specific paste command
-    if config.paste_cmd then
-        -- Send in bracketed paste mode for better handling
-        self:send_text("\x1b[200~", { raw = true })
-        
-        -- Handle different paste command formats
-        if config.paste_cmd:match("%%s") then
-            -- Format command with content
-            local cmd = string.format(config.paste_cmd, text)
-            self:send_text(cmd, { add_to_history = true })
-        else
-            -- Send paste command followed by content
-            self:send_text(config.paste_cmd .. "\n" .. text, { add_to_history = true })
-        end
-        
-        -- End bracketed paste mode
-        self:send_text("\x1b[201~", { raw = true })
-    else
-        -- Fallback to bracketed paste
-        self:send_text(text, { add_to_history = true, use_bracketed_paste = true })
-    end
-
-    -- Restore clipboard
-    vim.fn.setreg('+', old_clipboard)
-
-    -- Restore cursor position
-    api.nvim_win_set_cursor(current_win, current_pos)
-
-    -- Focus REPL window
-    if self.current_repl.window and api.nvim_win_is_valid(self.current_repl.window) then
-        api.nvim_set_current_win(self.current_repl.window)
-        vim.cmd('startinsert')
-    end
+	if text ~= "" then
+		self:add_to_history(text, self.current_repl.filetype)
+		self:send_text(text)
+	end
 end
 
--- Improve send_text method for better REPL interaction
-function Neaterm:send_text(text, opts)
-    opts = opts or {}
-    if not self.current_repl or not self.current_repl.job_id then
-        vim.notify("No active REPL job", vim.log.levels.WARN)
-        return false
-    end
-
-    -- Handle different line endings
-    text = text:gsub("\r\n", "\n")
-    if not text:match("\n$") and not opts.raw then
-        text = text .. "\n"
-    end
-
-    -- Use bracketed paste mode if requested
-    if opts.use_bracketed_paste and not opts.raw then
-        text = string.format("\x1b[200~%s\x1b[201~", text)
-    end
-
-    -- Send text to terminal
-    local success = pcall(vim.fn.chansend, self.current_repl.job_id, text)
-
-    -- Add to history if requested and successful
-    if success and opts.add_to_history then
-        self:add_to_history(text, self.current_repl.filetype)
-    end
-
-    return success
-end
-
--- Add REPL history management
-function Neaterm:add_to_history(text, filetype)
-    if not self.repl_history then
-        self.repl_history = {}
-    end
-    if not self.repl_history[filetype] then
-        self.repl_history[filetype] = {}
-    end
-
-    -- Remove duplicate if exists
-    for i, item in ipairs(self.repl_history[filetype]) do
-        if item == text then
-            table.remove(self.repl_history[filetype], i)
-            break
-        end
-    end
-
-    -- Add to history
-    table.insert(self.repl_history[filetype], text)
-
-    -- Trim history if needed
-    local max_history = self.opts.repl.max_history or 100
-    while #self.repl_history[filetype] > max_history do
-        table.remove(self.repl_history[filetype], 1)
-    end
-
-    -- Save history if enabled
-    if self.opts.repl.save_history then
-        self:save_repl_history()
-    end
-end
-
--- Add REPL history persistence
-function Neaterm:save_repl_history()
-    if not self.opts.repl.save_history then return end
-
-    local history_file = self.opts.repl.history_file
-    if not history_file then return end
-
-    -- Ensure directory exists
-    local dir = vim.fn.fnamemodify(history_file, ":h")
-    if vim.fn.isdirectory(dir) == 0 then
-        vim.fn.mkdir(dir, "p")
-    end
-
-    -- Save history to file
-    local ok, json = pcall(vim.json.encode, self.repl_history)
-    if ok then
-        local file = io.open(history_file, "w")
-        if file then
-            file:write(json)
-            file:close()
-        end
-    end
-end
-
--- Load REPL history on startup
-function Neaterm:load_repl_history()
-    if not self.opts.repl.save_history then return end
-
-    local history_file = self.opts.repl.history_file
-    if not history_file or vim.fn.filereadable(history_file) == 0 then return end
-
-    local file = io.open(history_file, "r")
-    if not file then return end
-
-    local content = file:read("*all")
-    file:close()
-
-    local ok, history = pcall(vim.json.decode, content)
-    if ok then
-        self.repl_history = history
-    end
-end
-
+-- Send selection to REPL
 function Neaterm:send_selection_to_repl()
 	if not self.current_repl then
 		vim.notify("No active REPL", vim.log.levels.WARN)
@@ -1184,7 +1161,40 @@ function Neaterm:send_selection_to_repl()
 
 	local text = utils.get_visual_selection()
 	if text ~= "" then
-		self:send_text(text, { add_to_history = true })
+		self:add_to_history(text, self.current_repl.filetype)
+		self:send_text(text)
+	end
+end
+
+-- Add to history with proper checks
+function Neaterm:add_to_history(text, filetype)
+	if not text or text == "" or not filetype then
+		return
+	end
+
+	if not self.history[filetype] then
+		self.history[filetype] = {}
+	end
+
+	-- Remove duplicate if exists
+	for i, item in ipairs(self.history[filetype]) do
+		if item == text then
+			table.remove(self.history[filetype], i)
+			break
+		end
+	end
+
+	-- Add to start of history
+	table.insert(self.history[filetype], 1, text)
+
+	-- Limit history size
+	while #self.history[filetype] > (self.opts.repl.max_history or 100) do
+		table.remove(self.history[filetype])
+	end
+
+	-- Save history if enabled
+	if self.opts.repl.save_history then
+		self:save_repl_history()
 	end
 end
 
@@ -1220,8 +1230,8 @@ end
 
 -- Focus terminal bar
 function Neaterm:focus_bar()
-	if self.bar and self.bar.win and api.nvim_win_is_valid(self.bar.win) then
-		api.nvim_set_current_win(self.bar.win)
+	if self.bar_win and api.nvim_win_is_valid(self.bar_win) then
+		api.nvim_set_current_win(self.bar_win)
 	end
 end
 
@@ -1470,7 +1480,7 @@ function Neaterm:setup_features()
 		self:show_terminal_picker()
 	end, {
 		silent = true,
-		desc = "Terminal Picker",
+		desc = self.opts.keymaps.terminal_picker.desc,
 	})
 end
 
@@ -1481,9 +1491,32 @@ function Neaterm:send_code_block()
 		return
 	end
 
-	local block = utils.get_code_block()
+	local current_line = vim.fn.line(".")
+	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+	local block_start, block_end = current_line, current_line
+
+	-- Search backwards for block start
+	for i = current_line - 1, 1, -1 do
+		if lines[i]:match("^%s*$") then
+			block_start = i + 1
+			break
+		end
+		block_start = i
+	end
+
+	-- Search forwards for block end
+	for i = current_line + 1, #lines do
+		if lines[i]:match("^%s*$") then
+			block_end = i - 1
+			break
+		end
+		block_end = i
+	end
+
+	local block = table.concat(lines, "\n", block_start, block_end)
 	if block ~= "" then
-		self:send_text(block, { add_to_history = true })
+		self:add_to_history(block, self.current_repl.filetype)
+		self:send_text(block)
 	end
 end
 
@@ -1730,381 +1763,6 @@ function Neaterm:close_variable_inspector()
 		end
 		self.var_inspector = nil
 	end
-end
-
--- Add to Neaterm class
-function Neaterm:setup_terminal_features()
-	-- Terminal multiplexer features
-	self.panes = {}
-	self.layouts = {}
-
-	-- Add terminal features
-	self.features = {
-		multiplexer = true,
-		search = true,
-		scrollback = true,
-		url_handler = true,
-	}
-
-	if self.features.search then
-		self:setup_terminal_search()
-	end
-
-	if self.features.url_handler then
-		self:setup_url_handler()
-	end
-end
-
-function Neaterm:setup_terminal_search()
-	-- Add incremental search in terminal buffer
-	vim.keymap.set("t", "<C-/>", function()
-		self:start_terminal_search()
-	end, { silent = true })
-end
-
-function Neaterm:start_terminal_search()
-	local term = self.terminals[self.current_terminal]
-	if not term then
-		return
-	end
-
-	-- Create search UI
-	local buf = vim.api.nvim_create_buf(false, true)
-	local win = vim.api.nvim_open_win(buf, true, {
-		relative = "editor",
-		width = 30,
-		height = 1,
-		row = 1,
-		col = vim.o.columns - 31,
-		style = "minimal",
-		border = "single",
-	})
-
-	-- Setup search logic
-	vim.api.nvim_buf_set_option(buf, "buftype", "prompt")
-	vim.fn.prompt_setprompt(buf, "Search: ")
-
-	-- Handle search input
-	vim.keymap.set("i", "<CR>", function()
-		local query = vim.fn.getline(".")
-		self:search_terminal(query)
-		vim.api.nvim_win_close(win, true)
-	end, { buffer = buf })
-end
-
-function Neaterm:setup_url_handler()
-	-- Detect and handle URLs in terminal
-	vim.api.nvim_create_autocmd("TextChanged", {
-		pattern = "term://*",
-		callback = function()
-			self:highlight_urls()
-		end,
-	})
-end
-
-function Neaterm:highlight_urls()
-	local term = self.terminals[self.current_terminal]
-	if not term then
-		return
-	end
-
-	-- Create highlight group for URLs
-	vim.api.nvim_set_hl(0, "TermURL", { underline = true, special = "Blue" })
-
-	-- Find and highlight URLs
-	local content = vim.api.nvim_buf_get_lines(term.buf, 0, -1, false)
-	local urls = {}
-
-	for i, line in ipairs(content) do
-		for url in line:gmatch("https?://[%w-_%.%?%.:/%+=&]+") do
-			table.insert(urls, {
-				line = i - 1,
-				col_start = line:find(url) - 1,
-				col_end = line:find(url) + #url - 1,
-			})
-		end
-	end
-
-	-- Apply highlights
-	local ns_id = vim.api.nvim_create_namespace("terminal_urls")
-	vim.api.nvim_buf_clear_namespace(term.buf, ns_id, 0, -1)
-
-	for _, url in ipairs(urls) do
-		vim.api.nvim_buf_add_highlight(term.buf, ns_id, "TermURL", url.line, url.col_start, url.col_end)
-	end
-end
-
--- Add this validation function
-function Neaterm:validate_terminal_opts(opts)
-	-- Default to valid if no opts
-	if not opts then return true end
-
-	-- Validate terminal type
-	if opts.type and not vim.tbl_contains({"float", "vertical", "horizontal", "full"}, opts.type) then
-		vim.notify("Invalid terminal type: " .. opts.type, vim.log.levels.ERROR)
-		return false
-	end
-
-	-- Validate dimensions for floating windows
-	if opts.type == "float" then
-		if opts.float_width and (opts.float_width <= 0 or opts.float_width > 1) then
-			vim.notify("Float width must be between 0 and 1", vim.log.levels.ERROR)
-			return false
-		end
-		if opts.float_height and (opts.float_height <= 0 or opts.float_height > 1) then
-			vim.notify("Float height must be between 0 and 1", vim.log.levels.ERROR)
-			return false
-		end
-	end
-
-	-- Validate command if provided
-	if opts.cmd and type(opts.cmd) ~= "string" then
-		vim.notify("Command must be a string", vim.log.levels.ERROR)
-		return false
-	end
-
-	return true
-end
-
--- Add this helper function for creating smart windows
-function Neaterm:create_smart_window(opts, buf)
-	if opts.type == "float" then
-		-- Calculate floating window dimensions
-		local width = math.floor(vim.o.columns * (opts.float_width or self.opts.float_width))
-		local height = math.floor(vim.o.lines * (opts.float_height or self.opts.float_height))
-
-		-- Ensure minimum dimensions
-		width = math.max(width, self.opts.min_width or 20)
-		height = math.max(height, self.opts.min_height or 3)
-
-		-- Calculate position
-		local row = vim.o.lines - height - 4
-		local col = math.floor((vim.o.columns - width) / 2)
-
-		-- Create floating window
-		return api.nvim_open_win(buf, true, {
-			relative = "editor",
-			width = width,
-			height = height,
-			row = row,
-			col = col,
-			style = "minimal",
-			border = self.opts.border
-		})
-	else
-		-- Handle split windows
-		local cmd = opts.type == "full" and "enew" or 
-				   opts.type == "vertical" and "vsplit" or 
-				   "split"
-		
-		vim.cmd(cmd)
-		local win = api.nvim_get_current_win()
-		api.nvim_win_set_buf(win, buf)
-		return win
-	end
-end
-
--- Add this helper function for terminal environment
-function Neaterm:get_terminal_env()
-	local env = vim.fn.environ()
-	-- Add any custom environment variables
-	env.TERM = "xterm-256color"
-	return env
-end
-
--- Add this helper function for terminal exit handling
-function Neaterm:handle_terminal_exit(buf, code)
-	-- Clean up terminal resources
-	if self.terminals[buf] then
-		-- Handle terminal-specific cleanup
-		if self.terminals[buf].on_exit then
-			self.terminals[buf].on_exit(code)
-		end
-		
-		-- Remove from terminals table
-		self.terminals[buf] = nil
-		
-		-- Update current terminal if needed
-		if self.current_terminal == buf then
-			self.current_terminal = next(self.terminals)
-		end
-		
-		-- Update UI
-		self:update_ui()
-	end
-end
-
--- Add this helper function for terminal cleanup
-function Neaterm:cleanup_terminal(buf)
-	if not buf then return end
-	
-	-- Close window if it exists
-	local term = self.terminals[buf]
-	if term and term.window and api.nvim_win_is_valid(term.window) then
-		api.nvim_win_close(term.window, true)
-	end
-	
-	-- Delete buffer if it exists
-	if api.nvim_buf_is_valid(buf) then
-		api.nvim_buf_delete(buf, { force = true })
-	end
-	
-	-- Remove from terminals table
-	self.terminals[buf] = nil
-	
-	-- Update current terminal if needed
-	if self.current_terminal == buf then
-		self.current_terminal = next(self.terminals)
-	end
-	
-	-- Update UI
-	self:update_ui()
-end
-
--- Add this UI update method
-function Neaterm:update_ui()
-	-- Update terminal bar
-	if self.bar and self.bar.win and api.nvim_win_is_valid(self.bar.win) then
-		self:update_bar()
-	end
-
-	-- Update terminal title if exists
-	if self.current_terminal then
-		local term = self.terminals[self.current_terminal]
-		if term and term.window and api.nvim_win_is_valid(term.window) then
-			local title = term.cmd and term.cmd:match("([^/]+)$") or "terminal"
-			api.nvim_buf_set_name(self.current_terminal, string.format("term://%s", title))
-		end
-	end
-end
-
--- Add bar update method if not already present
-function Neaterm:update_bar()
-	if not self.bar or not self.bar.win or not api.nvim_win_is_valid(self.bar.win) then
-		return
-	end
-
-	local terminals = vim.tbl_keys(self.terminals)
-	if #terminals == 0 then
-		if self.bar.win and api.nvim_win_is_valid(self.bar.win) then
-			api.nvim_win_close(self.bar.win, true)
-			self.bar.win = nil
-		end
-		return
-	end
-
-	-- Update bar content
-	local bar_content = {}
-	for i, term_buf in ipairs(terminals) do
-		local is_repl = self.current_repl and self.current_repl.buf == term_buf
-		local is_current = term_buf == self.current_terminal
-		local item = string.format("%s%d%s", is_current and "[" or " ", i, is_current and "]" or " ")
-		if is_repl then
-			item = item .. "*"
-		end
-		table.insert(bar_content, item)
-	end
-
-	-- Set bar text
-	local bar_text = table.concat(bar_content, " ")
-	pcall(api.nvim_buf_set_option, self.bar.buf, 'modifiable', true)
-	pcall(api.nvim_buf_set_lines, self.bar.buf, 0, -1, false, { bar_text })
-	pcall(api.nvim_buf_set_option, self.bar.buf, 'modifiable', false)
-
-	-- Update bar window config
-	local total_width = #bar_text + 2
-	pcall(api.nvim_win_set_config, self.bar.win, {
-		relative = "editor",
-		width = total_width,
-		height = 1,
-		row = 1,
-		col = vim.o.columns - total_width - 1,
-	})
-end
-
--- Add setup_terminal_settings if not already present
-function Neaterm:setup_terminal_settings(win, buf, term)
-	-- Window-specific settings
-	local win_opts = {
-		number = false,
-		relativenumber = false,
-		signcolumn = "no",
-		wrap = false,
-	}
-
-	for opt, value in pairs(win_opts) do
-		pcall(api.nvim_win_set_option, win, opt, value)
-	end
-
-	-- Buffer-specific settings
-	local buf_opts = {
-		bufhidden = "hide",
-		filetype = "neaterm",
-		buflisted = false,
-	}
-
-	for opt, value in pairs(buf_opts) do
-		pcall(api.nvim_buf_set_option, buf, opt, value)
-	end
-
-	-- Terminal-specific keymaps with descriptions
-	local term_maps = {
-		['<ESC><ESC>'] = {
-			cmd = '<C-\\><C-n>',
-			desc = 'Exit terminal insert mode'
-		},
-		['<C-\\><C-n>'] = {
-			cmd = '<Cmd>startinsert<CR>',
-			desc = 'Enter terminal insert mode'
-		},
-		['<C-h>'] = {
-			cmd = '<Cmd>wincmd h<CR>',
-			desc = 'Move to left window'
-		},
-		['<C-j>'] = {
-			cmd = '<Cmd>wincmd j<CR>',
-			desc = 'Move to bottom window'
-		},
-		['<C-k>'] = {
-			cmd = '<Cmd>wincmd k<CR>',
-			desc = 'Move to top window'
-		},
-		['<C-l>'] = {
-			cmd = '<Cmd>wincmd l<CR>',
-			desc = 'Move to right window'
-		},
-		['<C-w>'] = {
-			cmd = '<C-\\><C-n><C-w>',
-			desc = 'Window command prefix'
-		}
-	}
-
-	-- Add custom keymaps if provided
-	if term and term.keymaps then
-		for lhs, map in pairs(term.keymaps) do
-			term_maps[lhs] = map
-		end
-	end
-
-	-- Apply keymaps
-	for lhs, map in pairs(term_maps) do
-		vim.keymap.set('t', lhs, map.cmd, {
-			buffer = buf,
-			silent = true,
-			desc = map.desc
-		})
-	end
-
-	-- Auto-enter insert mode when focusing terminal
-	vim.api.nvim_create_autocmd("WinEnter", {
-		buffer = buf,
-		callback = function()
-			if vim.bo[buf].buftype == 'terminal' then
-				vim.cmd('startinsert')
-			end
-		end,
-		desc = "Auto-enter insert mode in terminal"
-	})
 end
 
 return Neaterm
