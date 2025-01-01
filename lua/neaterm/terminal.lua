@@ -265,109 +265,71 @@ end
 -- Terminal Management Methods
 function Neaterm:create_terminal(opts)
 	opts = opts or {}
-
-	if opts.cmd and type(opts.cmd) ~= "string" then
-		vim.notify("Terminal command must be a string", vim.log.levels.ERROR)
-		return nil
-	end
-	-- Create buffer with error handling
-	local ok, buf = pcall(api.nvim_create_buf, false, true)
-	if not ok then
-		vim.notify("Failed to create terminal buffer: " .. buf, vim.log.levels.ERROR)
+	
+	-- Validate terminal options
+	if not self:validate_terminal_opts(opts) then
 		return nil
 	end
 
-	-- Set buffer options safely
-	pcall(api.nvim_buf_set_option, buf, "filetype", "neaterm")
-	pcall(api.nvim_buf_set_option, buf, "bufhidden", "wipe")
-	pcall(api.nvim_buf_set_option, buf, "buflisted", false)
-	pcall(api.nvim_buf_set_option, buf, "swapfile", false)
-	pcall(api.nvim_buf_set_option, buf, "modifiable", true)
+	-- Create buffer with improved options
+	local buf = api.nvim_create_buf(false, true)
+	if not buf then return nil end
 
-	-- Create window with error handling
-	local win = utils.create_window(self.opts, opts, buf)
+	-- Set improved buffer options
+	local buf_opts = {
+		bufhidden = "wipe",
+		buflisted = false,
+		swapfile = false,
+		modifiable = true,
+		filetype = "neaterm",
+		['terminal'] = true
+	}
+	
+	for opt, val in pairs(buf_opts) do
+		vim.api.nvim_buf_set_option(buf, opt, val)
+	end
+
+	-- Create window with smart positioning
+	local win = self:create_smart_window(opts, buf)
 	if not win then
-		pcall(api.nvim_buf_delete, buf, { force = true })
-		vim.notify("Failed to create terminal window", vim.log.levels.ERROR)
+		api.nvim_buf_delete(buf, { force = true })
 		return nil
 	end
 
-	-- Start terminal with error handling
-	local term_id = fn.termopen(opts.cmd or self.opts.shell, {
+	-- Start terminal with improved error handling
+	local ok, term_id = pcall(vim.fn.termopen, opts.cmd or self.opts.shell, {
 		on_exit = function(_, code)
 			vim.schedule(function()
-				-- Handle terminal exit
-				if api.nvim_buf_is_valid(buf) then
-					-- Execute custom on_exit handler if provided
-					if opts.on_exit then
-						local success, err = pcall(opts.on_exit, code)
-						if not success then
-							vim.notify("Terminal exit handler failed: " .. err, vim.log.levels.ERROR)
-						end
-					end
-
-					-- Cleanup terminal
-					self.terminals[buf] = nil
-					if self.current_terminal == buf then
-						self.current_terminal = nil
-					end
-					if self.current_repl and self.current_repl.buf == buf then
-						self.current_repl = nil
-					end
-
-					-- Close window safely
-					if win and api.nvim_win_is_valid(win) then
-						pcall(api.nvim_win_close, win, true)
-					end
-
-					-- Delete buffer safely
-					pcall(api.nvim_buf_delete, buf, { force = true })
-				end
-
-				-- Update UI
-				ui.update_bar(self)
+				self:handle_terminal_exit(buf, code)
 			end)
 		end,
+		env = self:get_terminal_env()
 	})
 
-	if term_id <= 0 then
-		pcall(api.nvim_buf_delete, buf, { force = true })
-		vim.notify("Failed to create terminal: Command not found or failed to start", vim.log.levels.ERROR)
+	if not ok or term_id <= 0 then
+		self:cleanup_terminal(buf)
+		vim.notify("Failed to create terminal", vim.log.levels.ERROR)
 		return nil
 	end
 
-	-- Store terminal info with validation
-	local terminal_info = {
+	-- Store terminal info
+	self.terminals[buf] = {
 		window = win,
 		job_id = term_id,
 		type = opts.type,
-		cmd = opts.cmd or self.opts.shell,
+		cmd = opts.cmd,
 		keymaps = opts.keymaps,
+		created_at = os.time()
 	}
-	self.terminals[buf] = terminal_info
 
-	-- Setup terminal settings safely
-	local setup_ok, setup_err = pcall(self.setup_terminal_settings, self, win, buf, terminal_info)
-	if not setup_ok then
-		vim.notify("Failed to setup terminal settings: " .. setup_err, vim.log.levels.WARN)
-	end
-
-	-- Set as current terminal
+	-- Setup terminal settings
+	self:setup_terminal_settings(win, buf, self.terminals[buf])
+	
+	-- Set as current and update UI
 	self.current_terminal = buf
-
-	-- Update UI safely
-	pcall(ui.update_bar, self)
-
-	-- Enter insert mode safely
-	vim.schedule(function()
-		if api.nvim_buf_is_valid(buf) then
-			vim.cmd("startinsert")
-		end
-	end)
+	self:update_ui()
 
 	return buf
-
-	-- Validate terminal configuration
 end
 
 -- Add validation for terminal settings
@@ -1131,36 +1093,37 @@ function Neaterm:resize_terminal(direction)
 end
 
 function Neaterm:send_buffer_to_repl()
-	if not self.current_repl then
-		vim.notify("No active REPL", vim.log.levels.WARN)
-		return
-	end
+    if not self.current_repl then
+        vim.notify("No active REPL", vim.log.levels.WARN)
+        return
+    end
 
-	-- Get buffer content efficiently
-	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
-	local text = table.concat(lines, "\n")
+    -- Get buffer content efficiently
+    local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+    local text = table.concat(lines, "\n")
+    
+    -- Skip if empty
+    if text == "" then return end
 
-	if text ~= "" then
-		self:send_text(text, { add_to_history = true })
-	end
+    local config = self.repl_configs[self.current_repl.filetype]
+    if not config then return end
+
+    -- Use filetype-specific paste command if available
+    if config.paste_cmd then
+        if config.paste_cmd:match("%%s") then
+            -- Format command with content
+            local cmd = string.format(config.paste_cmd, text)
+            self:send_text(cmd, { add_to_history = true })
+        else
+            -- Send paste command followed by content
+            self:send_text(config.paste_cmd .. "\n" .. text, { add_to_history = true })
+        end
+    else
+        -- Fallback to bracketed paste
+        self:send_text(text, { add_to_history = true, use_bracketed_paste = true })
+    end
 end
--- function Neaterm:send_buffer_to_repl()
--- 	if not self.current_repl then
--- 		vim.notify("No active REPL", vim.log.levels.WARN)
--- 		return
--- 	end
---
--- 	-- Get buffer content as single string
--- 	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
--- 	local text = table.concat(lines, "\n")
---
--- 	-- Send using bracketed paste
--- 	local term = self.terminals[self.current_repl.buf]
--- 	if term and term.job_id then
--- 		utils.batch_send_text(term.job_id, text)
--- 	end
--- end
--- Send selection to REPL
+
 function Neaterm:send_selection_to_repl()
 	if not self.current_repl then
 		vim.notify("No active REPL", vim.log.levels.WARN)

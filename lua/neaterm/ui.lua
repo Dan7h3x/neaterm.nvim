@@ -42,42 +42,41 @@ function M.create_window(opts, term_opts, buf)
 	return win
 end
 function M.create_bar(neaterm)
-	neaterm.bar_buf = api.nvim_create_buf(false, true)
-
-	local buf_opts = {
-		buftype = "nofile",
-		filetype = "neaterm",
-		bufhidden = "hide",
-		swapfile = false,
-	}
-
-	for opt, value in pairs(buf_opts) do
-		api.nvim_set_option_value(opt, value, { buf = neaterm.bar_buf })
-	end
-
-	local win_opts = {
+	-- Create buffer with improved options
+	local buf = api.nvim_create_buf(false, true)
+	vim.api.nvim_buf_set_option(buf, 'modifiable', false)
+	
+	-- Calculate optimal bar position
+	local bar_width = math.min(vim.o.columns - 2, 40)
+	local bar_pos = {
 		relative = "editor",
-		width = 20,
+		width = bar_width,
 		height = 1,
 		row = 1,
-		col = vim.o.columns - 21,
+		col = vim.o.columns - bar_width - 1,
 		style = "minimal",
 		border = neaterm.opts.border,
+		zindex = 50  -- Keep bar on top
 	}
 
-	neaterm.bar_win = api.nvim_open_win(neaterm.bar_buf, false, win_opts)
-	api.nvim_win_set_option(neaterm.bar_win, "winhl", "Normal:NeatermNormal,FloatBorder:NeatermBorder")
+	-- Create window with improved options
+	local win = api.nvim_open_win(buf, false, bar_pos)
+	
+	-- Set window highlights
+	vim.api.nvim_win_set_option(win, "winhl", "Normal:NeatermNormal,FloatBorder:NeatermBorder")
+	
+	-- Store references
+	neaterm.bar = {
+		buf = buf,
+		win = win,
+		items = {},
+		active_index = 1
+	}
 
-	-- Setup bar keymaps
-	vim.keymap.set("n", "<CR>", function()
-		local cursor_pos = api.nvim_win_get_cursor(neaterm.bar_win)
-		local term_index = math.floor(cursor_pos[2] / 2) + 1
-		local terminals = vim.tbl_keys(neaterm.terminals)
-		if term_index > 0 and term_index <= #terminals then
-			neaterm:show_terminal(terminals[term_index])
-		end
-	end, { buffer = neaterm.bar_buf, silent = true })
-
+	-- Setup improved keymaps
+	M.setup_bar_keymaps(neaterm)
+	
+	-- Initial update
 	M.update_bar(neaterm)
 end
 

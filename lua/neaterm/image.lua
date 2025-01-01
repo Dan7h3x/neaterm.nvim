@@ -48,6 +48,66 @@ M.backends = {
 			vim.fn.system([[ueberzug layer --parser json <<< '{"action": "remove", "identifier": "preview"}']])
 		end,
 	},
+
+	ueberzugpp = {
+		setup = function()
+			return vim.fn.executable("ueberzugpp") == 1
+		end,
+
+		show_image = function(path, opts)
+			local json = vim.json.encode({
+				action = "add",
+				identifier = "preview",
+				path = path,
+				x = opts.x or 0,
+				y = opts.y or 0,
+				width = opts.width or 100,
+				height = opts.height or 50,
+				scaler = "contain",
+			})
+			
+			vim.fn.jobstart({"ueberzugpp", "layer", "--silent", "--parser", "json"}, {
+				stdin_data = json,
+				detach = true
+			})
+		end,
+
+		clear = function()
+			vim.fn.jobstart({"ueberzugpp", "layer", "--silent", "--parser", "json"}, {
+				stdin_data = '{"action":"remove","identifier":"preview"}',
+				detach = true
+			})
+		end
+	},
+
+	chafa = {
+		setup = function()
+			return vim.fn.executable("chafa") == 1
+		end,
+
+		show_image = function(path, opts)
+			local cmd = string.format(
+				"chafa -f symbols -s %dx%d --animate false %s",
+				opts.width or 100,
+				opts.height or 50,
+				vim.fn.shellescape(path)
+			)
+			
+			vim.fn.jobstart(cmd, {
+				on_stdout = function(_, data)
+					if data then
+						vim.schedule(function()
+							vim.api.nvim_chan_send(vim.b.terminal_job_id, table.concat(data, "\n"))
+						end)
+					end
+				end
+			})
+		end,
+
+		clear = function()
+			vim.api.nvim_chan_send(vim.b.terminal_job_id, "\x1b[2J\x1b[H")
+		end
+	}
 }
 
 function M.setup(opts)
