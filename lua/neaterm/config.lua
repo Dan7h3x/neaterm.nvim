@@ -18,13 +18,21 @@ local default_opts = {
 	},
 
 	image_preview = {
-		enabled = true,
-		backend = "kitty", -- or "ueberzug"
-		max_width = 100,
-		max_height = 50,
-		offset_x = 2,
-		offset_y = 1,
-	},
+        enabled = true,
+        backend = "ueberzugpp", -- or "chafa"
+        max_width = 100,
+        max_height = 50,
+        offset_x = 2,
+        offset_y = 1,
+        file_patterns = {
+            "%.png$",
+            "%.jpg$",
+            "%.jpeg$",
+            "%.gif$",
+            "%.bmp$",
+            "%.webp$"
+        }
+    },
 
 	-- Window management
 	min_width = 20,
