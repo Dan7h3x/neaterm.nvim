@@ -1888,4 +1888,131 @@ function Neaterm:highlight_urls()
 	end
 end
 
+-- Add this validation function
+function Neaterm:validate_terminal_opts(opts)
+	-- Default to valid if no opts
+	if not opts then return true end
+
+	-- Validate terminal type
+	if opts.type and not vim.tbl_contains({"float", "vertical", "horizontal", "full"}, opts.type) then
+		vim.notify("Invalid terminal type: " .. opts.type, vim.log.levels.ERROR)
+		return false
+	end
+
+	-- Validate dimensions for floating windows
+	if opts.type == "float" then
+		if opts.float_width and (opts.float_width <= 0 or opts.float_width > 1) then
+			vim.notify("Float width must be between 0 and 1", vim.log.levels.ERROR)
+			return false
+		end
+		if opts.float_height and (opts.float_height <= 0 or opts.float_height > 1) then
+			vim.notify("Float height must be between 0 and 1", vim.log.levels.ERROR)
+			return false
+		end
+	end
+
+	-- Validate command if provided
+	if opts.cmd and type(opts.cmd) ~= "string" then
+		vim.notify("Command must be a string", vim.log.levels.ERROR)
+		return false
+	end
+
+	return true
+end
+
+-- Add this helper function for creating smart windows
+function Neaterm:create_smart_window(opts, buf)
+	if opts.type == "float" then
+		-- Calculate floating window dimensions
+		local width = math.floor(vim.o.columns * (opts.float_width or self.opts.float_width))
+		local height = math.floor(vim.o.lines * (opts.float_height or self.opts.float_height))
+
+		-- Ensure minimum dimensions
+		width = math.max(width, self.opts.min_width or 20)
+		height = math.max(height, self.opts.min_height or 3)
+
+		-- Calculate position
+		local row = vim.o.lines - height - 4
+		local col = math.floor((vim.o.columns - width) / 2)
+
+		-- Create floating window
+		return api.nvim_open_win(buf, true, {
+			relative = "editor",
+			width = width,
+			height = height,
+			row = row,
+			col = col,
+			style = "minimal",
+			border = self.opts.border
+		})
+	else
+		-- Handle split windows
+		local cmd = opts.type == "full" and "enew" or 
+				   opts.type == "vertical" and "vsplit" or 
+				   "split"
+		
+		vim.cmd(cmd)
+		local win = api.nvim_get_current_win()
+		api.nvim_win_set_buf(win, buf)
+		return win
+	end
+end
+
+-- Add this helper function for terminal environment
+function Neaterm:get_terminal_env()
+	local env = vim.fn.environ()
+	-- Add any custom environment variables
+	env.TERM = "xterm-256color"
+	return env
+end
+
+-- Add this helper function for terminal exit handling
+function Neaterm:handle_terminal_exit(buf, code)
+	-- Clean up terminal resources
+	if self.terminals[buf] then
+		-- Handle terminal-specific cleanup
+		if self.terminals[buf].on_exit then
+			self.terminals[buf].on_exit(code)
+		end
+		
+		-- Remove from terminals table
+		self.terminals[buf] = nil
+		
+		-- Update current terminal if needed
+		if self.current_terminal == buf then
+			self.current_terminal = next(self.terminals)
+		end
+		
+		-- Update UI
+		self:update_ui()
+	end
+end
+
+-- Add this helper function for terminal cleanup
+function Neaterm:cleanup_terminal(buf)
+	if not buf then return end
+	
+	-- Close window if it exists
+	local term = self.terminals[buf]
+	if term and term.window and api.nvim_win_is_valid(term.window) then
+		api.nvim_win_close(term.window, true)
+	end
+	
+	-- Delete buffer if it exists
+	if api.nvim_buf_is_valid(buf) then
+		api.nvim_buf_delete(buf, { force = true })
+	end
+	
+	-- Remove from terminals table
+	self.terminals[buf] = nil
+	
+	-- Update current terminal if needed
+	if self.current_terminal == buf then
+		self.current_terminal = next(self.terminals)
+	end
+	
+	-- Update UI
+	self:update_ui()
+end
+
 return Neaterm
