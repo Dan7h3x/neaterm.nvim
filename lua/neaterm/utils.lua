@@ -196,8 +196,6 @@ function M.batch_send_text(term_job_id, text_blocks)
 	local prepared_text = text_blocks:gsub("\n", "\\n")
 	local bracketed_paste = string.format("\x1b[200~%s\x1b[201~", prepared_text)
 
-
-
 	-- -- Prepare content with proper line endings
 	-- local content = table.concat(text_blocks, "\n")
 	-- if not content:match("\n$") then

@@ -1130,36 +1130,36 @@ function Neaterm:resize_terminal(direction)
 	end
 end
 
--- function Neaterm:send_buffer_to_repl()
--- 	if not self.current_repl then
--- 		vim.notify("No active REPL", vim.log.levels.WARN)
--- 		return
--- 	end
-
--- 	-- Get buffer content efficiently
--- 	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
--- 	local text = table.concat(lines, "\n")
-
--- 	if text ~= "" then
--- 		self:send_text(text, { add_to_history = true })
--- 	end
--- end
 function Neaterm:send_buffer_to_repl()
 	if not self.current_repl then
 		vim.notify("No active REPL", vim.log.levels.WARN)
 		return
 	end
 
-	-- Get buffer content as single string
+	-- Get buffer content efficiently
 	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
 	local text = table.concat(lines, "\n")
 
-	-- Send using bracketed paste
-	local term = self.terminals[self.current_repl.buf]
-	if term and term.job_id then
-		utils.batch_send_text(term.job_id, text)
+	if text ~= "" then
+		self:send_text(text, { add_to_history = true })
 	end
 end
+-- function Neaterm:send_buffer_to_repl()
+-- 	if not self.current_repl then
+-- 		vim.notify("No active REPL", vim.log.levels.WARN)
+-- 		return
+-- 	end
+--
+-- 	-- Get buffer content as single string
+-- 	local lines = api.nvim_buf_get_lines(0, 0, -1, false)
+-- 	local text = table.concat(lines, "\n")
+--
+-- 	-- Send using bracketed paste
+-- 	local term = self.terminals[self.current_repl.buf]
+-- 	if term and term.job_id then
+-- 		utils.batch_send_text(term.job_id, text)
+-- 	end
+-- end
 -- Send selection to REPL
 function Neaterm:send_selection_to_repl()
 	if not self.current_repl then
