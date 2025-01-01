@@ -2014,4 +2014,150 @@ function Neaterm:cleanup_terminal(buf)
 	self:update_ui()
 end
 
+-- Add this UI update method
+function Neaterm:update_ui()
+	-- Update terminal bar
+	if self.bar and self.bar.win and api.nvim_win_is_valid(self.bar.win) then
+		self:update_bar()
+	end
+
+	-- Update terminal title if exists
+	if self.current_terminal then
+		local term = self.terminals[self.current_terminal]
+		if term and term.window and api.nvim_win_is_valid(term.window) then
+			local title = term.cmd and term.cmd:match("([^/]+)$") or "terminal"
+			api.nvim_buf_set_name(self.current_terminal, string.format("term://%s", title))
+		end
+	end
+end
+
+-- Add bar update method if not already present
+function Neaterm:update_bar()
+	if not self.bar or not self.bar.win or not api.nvim_win_is_valid(self.bar.win) then
+		return
+	end
+
+	local terminals = vim.tbl_keys(self.terminals)
+	if #terminals == 0 then
+		if self.bar.win and api.nvim_win_is_valid(self.bar.win) then
+			api.nvim_win_close(self.bar.win, true)
+			self.bar.win = nil
+		end
+		return
+	end
+
+	-- Update bar content
+	local bar_content = {}
+	for i, term_buf in ipairs(terminals) do
+		local is_repl = self.current_repl and self.current_repl.buf == term_buf
+		local is_current = term_buf == self.current_terminal
+		local item = string.format("%s%d%s", is_current and "[" or " ", i, is_current and "]" or " ")
+		if is_repl then
+			item = item .. "*"
+		end
+		table.insert(bar_content, item)
+	end
+
+	-- Set bar text
+	local bar_text = table.concat(bar_content, " ")
+	pcall(api.nvim_buf_set_option, self.bar.buf, 'modifiable', true)
+	pcall(api.nvim_buf_set_lines, self.bar.buf, 0, -1, false, { bar_text })
+	pcall(api.nvim_buf_set_option, self.bar.buf, 'modifiable', false)
+
+	-- Update bar window config
+	local total_width = #bar_text + 2
+	pcall(api.nvim_win_set_config, self.bar.win, {
+		relative = "editor",
+		width = total_width,
+		height = 1,
+		row = 1,
+		col = vim.o.columns - total_width - 1,
+	})
+end
+
+-- Add setup_terminal_settings if not already present
+function Neaterm:setup_terminal_settings(win, buf, term)
+	-- Window-specific settings
+	local win_opts = {
+		number = false,
+		relativenumber = false,
+		signcolumn = "no",
+		wrap = false,
+	}
+
+	for opt, value in pairs(win_opts) do
+		pcall(api.nvim_win_set_option, win, opt, value)
+	end
+
+	-- Buffer-specific settings
+	local buf_opts = {
+		bufhidden = "hide",
+		filetype = "neaterm",
+		buflisted = false,
+	}
+
+	for opt, value in pairs(buf_opts) do
+		pcall(api.nvim_buf_set_option, buf, opt, value)
+	end
+
+	-- Terminal-specific keymaps with descriptions
+	local term_maps = {
+		['<ESC><ESC>'] = {
+			cmd = '<C-\\><C-n>',
+			desc = 'Exit terminal insert mode'
+		},
+		['<C-\\><C-n>'] = {
+			cmd = '<Cmd>startinsert<CR>',
+			desc = 'Enter terminal insert mode'
+		},
+		['<C-h>'] = {
+			cmd = '<Cmd>wincmd h<CR>',
+			desc = 'Move to left window'
+		},
+		['<C-j>'] = {
+			cmd = '<Cmd>wincmd j<CR>',
+			desc = 'Move to bottom window'
+		},
+		['<C-k>'] = {
+			cmd = '<Cmd>wincmd k<CR>',
+			desc = 'Move to top window'
+		},
+		['<C-l>'] = {
+			cmd = '<Cmd>wincmd l<CR>',
+			desc = 'Move to right window'
+		},
+		['<C-w>'] = {
+			cmd = '<C-\\><C-n><C-w>',
+			desc = 'Window command prefix'
+		}
+	}
+
+	-- Add custom keymaps if provided
+	if term and term.keymaps then
+		for lhs, map in pairs(term.keymaps) do
+			term_maps[lhs] = map
+		end
+	end
+
+	-- Apply keymaps
+	for lhs, map in pairs(term_maps) do
+		vim.keymap.set('t', lhs, map.cmd, {
+			buffer = buf,
+			silent = true,
+			desc = map.desc
+		})
+	end
+
+	-- Auto-enter insert mode when focusing terminal
+	vim.api.nvim_create_autocmd("WinEnter", {
+		buffer = buf,
+		callback = function()
+			if vim.bo[buf].buftype == 'terminal' then
+				vim.cmd('startinsert')
+			end
+		end,
+		desc = "Auto-enter insert mode in terminal"
+	})
+end
+
 return Neaterm
