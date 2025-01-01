@@ -281,8 +281,7 @@ function Neaterm:create_terminal(opts)
 		buflisted = false,
 		swapfile = false,
 		modifiable = true,
-		filetype = "neaterm",
-		['terminal'] = true
+		filetype = "neaterm"
 	}
 	
 	for opt, val in pairs(buf_opts) do
