@@ -14,7 +14,18 @@ function M.create_window(opts, term_opts, buf)
     win_opts.height = math.floor(vim.o.lines * (term_opts.float_height or opts.float_height))
     win_opts.row = vim.o.lines - win_opts.height - 4
     win_opts.col = math.floor((vim.o.columns - win_opts.width) / 2)
-    return api.nvim_open_win(buf, true, win_opts)
+    
+    -- Add buffer deletion on window close
+    local win = api.nvim_open_win(buf, true, win_opts)
+    vim.api.nvim_create_autocmd("WinClosed", {
+      buffer = buf,
+      callback = function()
+        if vim.api.nvim_buf_is_valid(buf) then
+          vim.api.nvim_buf_delete(buf, { force = true })
+        end
+      end,
+    })
+    return win
   elseif term_opts.type == 'full' then
     vim.cmd('enew')
     local win = api.nvim_get_current_win()
@@ -27,7 +38,6 @@ function M.create_window(opts, term_opts, buf)
     return win
   end
 end
-
 function M.create_user_commands(neaterm)
   local function get_terminal_cmd(opts, terminal_type)
     if opts.args and opts.args ~= "" then
