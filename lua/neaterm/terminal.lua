@@ -415,6 +415,28 @@ function Neaterm:send_text(text)
   end
 
   local formatted_text = tostring(text)
+  
+  -- Format text based on REPL type
+  if self.current_repl then
+    local filetype = self.current_repl.filetype
+    local config = self.repl_configs[filetype]
+    
+    -- Apply language-specific formatting
+    if filetype == "python" then
+      -- For Python, ensure proper indentation is preserved
+      formatted_text = formatted_text:gsub("\n", "\n")
+    elseif filetype == "r" or filetype == "julia" then
+      -- For R and Julia, ensure each line is executed separately
+      formatted_text = formatted_text:gsub("\n", "\n")
+    end
+    
+    -- Add custom command suffix if defined in config
+    if config and config.command_suffix then
+      formatted_text = formatted_text .. config.command_suffix
+    end
+  end
+  
+  -- Ensure text ends with newline
   if not formatted_text:match("\n$") then
     formatted_text = formatted_text .. "\n"
   end
@@ -428,13 +450,38 @@ end
 
 function Neaterm:send_line_to_repl()
   if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
+    vim.notify("No active REPL. Start a REPL first with " .. self.opts.keymaps.repl_toggle, vim.log.levels.WARN)
     return
   end
 
   local line = api.nvim_get_current_line()
+  if line:match("^%s*$") then
+    vim.notify("Current line is empty", vim.log.levels.INFO)
+    return
+  end
+
+  -- Trim trailing whitespace
+  line = line:gsub("%s+$", "")
+  
+  -- Add to history
   self:add_to_history(line, self.current_repl.filetype)
+  
+  -- Send to REPL with visual feedback
   self:send_text(line)
+  
+  -- Visual feedback - briefly highlight the sent line
+  local bufnr = api.nvim_get_current_buf()
+  local line_num = api.nvim_win_get_cursor(0)[1] - 1
+  local ns_id = api.nvim_create_namespace('neaterm_highlight')
+  
+  api.nvim_buf_add_highlight(bufnr, ns_id, 'Search', line_num, 0, -1)
+  vim.defer_fn(function()
+    if api.nvim_buf_is_valid(bufnr) then
+      api.nvim_buf_clear_namespace(bufnr, ns_id, line_num, line_num + 1)
+    end
+  end, 300)
+  
+  vim.notify("Line sent to REPL", vim.log.levels.INFO)
 end
 
 -- REPL Configuration Methods
@@ -931,56 +978,188 @@ end
 
 -- Add movement and resize methods
 function Neaterm:move_terminal(direction)
-  local term = self.terminals[self.current_terminal]
-  if not term or not term.window then return end
+  local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
+  if not term_buf or not self.terminals[term_buf] then
+    vim.notify("No active terminal to move", vim.log.levels.WARN)
+    return
+  end
+
+  local term = self.terminals[term_buf]
+  if not term or not term.window or not api.nvim_win_is_valid(term.window) then
+    vim.notify("Terminal window is not valid", vim.log.levels.WARN)
+    return
+  end
 
   local win = term.window
   local config = api.nvim_win_get_config(win)
 
   if config.relative == 'editor' then -- Floating window
-    local changes = {
-      up = { row = -self.opts.move_amount },
-      down = { row = self.opts.move_amount },
-      left = { col = -self.opts.move_amount },
-      right = { col = self.opts.move_amount }
+    -- Get current dimensions
+    local current = {
+      row = type(config.row) == "table" and config.row[false] or config.row,
+      col = type(config.col) == "table" and config.col[false] or config.col,
+      width = config.width,
+      height = config.height
     }
-
-    self:update_float_position(win, changes[direction] or {})
+    
+    -- Calculate screen boundaries
+    local screen_width = vim.o.columns
+    local screen_height = vim.o.lines
+    
+    -- Calculate move amount based on window size
+    local move_amount = self.opts.move_amount or 3
+    local move_percent = 0.05 -- Move 5% of window size
+    
+    -- Calculate dynamic move amounts
+    local h_move = math.max(1, math.floor(current.width * move_percent))
+    local v_move = math.max(1, math.floor(current.height * move_percent))
+    
+    -- Apply move amount based on direction
+    local changes = {
+      up = { row = -v_move },
+      down = { row = v_move },
+      left = { col = -h_move },
+      right = { col = h_move }
+    }
+    
+    -- Apply changes with boundary checks
+    local new_config = vim.deepcopy(config)
+    local change = changes[direction] or {}
+    
+    if change.row then
+      local new_row = math.max(0, math.min(current.row + change.row, screen_height - current.height - 2))
+      new_config.row = new_row
+    end
+    
+    if change.col then
+      local new_col = math.max(0, math.min(current.col + change.col, screen_width - current.width - 2))
+      new_config.col = new_col
+    end
+    
+    -- Apply the new configuration
+    api.nvim_win_set_config(win, new_config)
+    
+    -- Provide visual feedback
+    vim.notify(string.format("Terminal moved %s", direction), vim.log.levels.INFO)
   else -- Regular window
+    -- For regular windows, use Neovim's window commands
     local directions = {
       up = 'K',
       down = 'J',
       left = 'H',
       right = 'L'
     }
+    
+    -- Save current window
+    local current_win = api.nvim_get_current_win()
+    
+    -- Focus terminal window
+    api.nvim_set_current_win(win)
+    
+    -- Execute window move command
     vim.cmd('wincmd ' .. directions[direction])
+    
+    -- Restore focus if needed
+    if current_win ~= win then
+      api.nvim_set_current_win(current_win)
+    end
   end
+  
+  -- Update UI
+  require('neaterm.ui').update_bar(self)
 end
 
 function Neaterm:resize_terminal(direction)
-  local term = self.terminals[self.current_terminal]
-  if not term or not term.window then return end
+  local term_buf = self.current_repl and self.current_repl.buf or self.current_terminal
+  if not term_buf or not self.terminals[term_buf] then
+    vim.notify("No active terminal to resize", vim.log.levels.WARN)
+    return
+  end
+
+  local term = self.terminals[term_buf]
+  if not term or not term.window or not api.nvim_win_is_valid(term.window) then
+    vim.notify("Terminal window is not valid", vim.log.levels.WARN)
+    return
+  end
 
   local win = term.window
   local config = api.nvim_win_get_config(win)
 
   if config.relative == 'editor' then -- Floating window
-    local changes = {
-      up = { height = -self.opts.resize_amount },
-      down = { height = self.opts.resize_amount },
-      left = { width = -self.opts.resize_amount },
-      right = { width = self.opts.resize_amount }
+    -- Get current dimensions
+    local current = {
+      row = type(config.row) == "table" and config.row[false] or config.row,
+      col = type(config.col) == "table" and config.col[false] or config.col,
+      width = config.width,
+      height = config.height
     }
-
-    self:update_float_position(win, changes[direction] or {})
+    
+    -- Calculate screen boundaries
+    local screen_width = vim.o.columns
+    local screen_height = vim.o.lines
+    
+    -- Calculate resize amount based on window size
+    local resize_amount = self.opts.resize_amount or 2
+    local resize_percent = 0.1 -- Resize by 10% of current size
+    
+    -- Calculate dynamic resize amounts
+    local h_resize = math.max(1, math.floor(current.width * resize_percent))
+    local v_resize = math.max(1, math.floor(current.height * resize_percent))
+    
+    -- Apply resize amount based on direction
+    local changes = {
+      up = { height = -v_resize },
+      down = { height = v_resize },
+      left = { width = -h_resize },
+      right = { width = h_resize }
+    }
+    
+    -- Apply changes with boundary checks
+    local new_config = vim.deepcopy(config)
+    local change = changes[direction] or {}
+    
+    if change.width then
+      -- Ensure minimum width
+      local new_width = math.max(self.opts.min_width or 20, current.width + change.width)
+      -- Ensure maximum width
+      new_width = math.min(new_width, screen_width - current.col - 2)
+      new_config.width = new_width
+    end
+    
+    if change.height then
+      -- Ensure minimum height
+      local new_height = math.max(self.opts.min_height or 3, current.height + change.height)
+      -- Ensure maximum height
+      new_height = math.min(new_height, screen_height - current.row - 2)
+      new_config.height = new_height
+    end
+    
+    -- Apply the new configuration
+    api.nvim_win_set_config(win, new_config)
+    
+    -- Provide visual feedback
+    vim.notify(string.format("Terminal resized %s", direction), vim.log.levels.INFO)
   else -- Regular window
+    -- Save current window
+    local current_win = api.nvim_get_current_win()
+    
+    -- Focus terminal window
+    api.nvim_set_current_win(win)
+    
+    -- Execute resize command
     local cmd = {
       up = 'resize -' .. self.opts.resize_amount,
       down = 'resize +' .. self.opts.resize_amount,
       left = 'vertical resize -' .. self.opts.resize_amount,
       right = 'vertical resize +' .. self.opts.resize_amount
     }
+    
     vim.cmd(cmd[direction])
+    
+    -- Restore focus if needed
+    if current_win ~= win then
+      api.nvim_set_current_win(current_win)
+    end
   end
 end
 
@@ -989,31 +1168,93 @@ end
 -- Send buffer content to REPL
 function Neaterm:send_buffer_to_repl()
   if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
+    vim.notify("No active REPL. Start a REPL first with " .. self.opts.keymaps.repl_toggle, vim.log.levels.WARN)
     return
   end
 
   local lines = api.nvim_buf_get_lines(0, 0, -1, false)
   local text = table.concat(lines, "\n")
-
-  if text ~= "" then
-    self:add_to_history(text, self.current_repl.filetype)
-    self:send_text(text)
+  
+  if text:match("^%s*$") then
+    vim.notify("Buffer is empty", vim.log.levels.INFO)
+    return
   end
+  
+  -- Confirm before sending large buffers
+  if #lines > 50 then
+    vim.ui.select({"Yes", "No"}, {
+      prompt = "Send " .. #lines .. " lines to REPL?",
+    }, function(choice)
+      if choice == "Yes" then
+        self:_send_buffer_content(text)
+      end
+    end)
+  else
+    self:_send_buffer_content(text)
+  end
+end
+
+-- Helper function to send buffer content
+function Neaterm:_send_buffer_content(text)
+  -- Add to history
+  self:add_to_history(text, self.current_repl.filetype)
+  
+  -- Send to REPL
+  self:send_text(text)
+  
+  -- Visual feedback - briefly highlight the entire buffer
+  local bufnr = api.nvim_get_current_buf()
+  local ns_id = api.nvim_create_namespace('neaterm_highlight')
+  
+  for i = 0, api.nvim_buf_line_count(bufnr) - 1 do
+    api.nvim_buf_add_highlight(bufnr, ns_id, 'Search', i, 0, -1)
+  end
+  
+  vim.defer_fn(function()
+    if api.nvim_buf_is_valid(bufnr) then
+      api.nvim_buf_clear_namespace(bufnr, ns_id, 0, -1)
+    end
+  end, 300)
+  
+  vim.notify("Buffer sent to REPL", vim.log.levels.INFO)
 end
 
 -- Send selection to REPL
 function Neaterm:send_selection_to_repl()
   if not self.current_repl then
-    vim.notify("No active REPL", vim.log.levels.WARN)
+    vim.notify("No active REPL. Start a REPL first with " .. self.opts.keymaps.repl_toggle, vim.log.levels.WARN)
     return
   end
 
   local text = utils.get_visual_selection()
-  if text ~= "" then
-    self:add_to_history(text, self.current_repl.filetype)
-    self:send_text(text)
+  if text == "" then
+    vim.notify("No text selected", vim.log.levels.INFO)
+    return
   end
+  
+  -- Add to history
+  self:add_to_history(text, self.current_repl.filetype)
+  
+  -- Send to REPL
+  self:send_text(text)
+  
+  -- Visual feedback - briefly highlight the sent selection
+  local bufnr = api.nvim_get_current_buf()
+  local start_pos = vim.fn.getpos("'<")
+  local end_pos = vim.fn.getpos("'>")
+  local ns_id = api.nvim_create_namespace('neaterm_highlight')
+  
+  for i = start_pos[2], end_pos[2] do
+    api.nvim_buf_add_highlight(bufnr, ns_id, 'Search', i - 1, 0, -1)
+  end
+  
+  vim.defer_fn(function()
+    if api.nvim_buf_is_valid(bufnr) then
+      api.nvim_buf_clear_namespace(bufnr, ns_id, start_pos[2] - 1, end_pos[2])
+    end
+  end, 300)
+  
+  vim.notify("Selection sent to REPL", vim.log.levels.INFO)
 end
 
 -- Add to history with proper checks
@@ -1217,6 +1458,37 @@ function Neaterm:safe_close_terminal(buf)
   vim.defer_fn(function()
     self:cleanup_terminal(buf)
   end, 50)
+end
+
+function Neaterm:close_terminal(buf)
+  if not buf or not self.terminals[buf] then
+    vim.notify("Terminal not found", vim.log.levels.WARN)
+    return
+  end
+
+  -- Check if it's a REPL
+  local is_repl = self.current_repl and self.current_repl.buf == buf
+  
+  if is_repl then
+    -- Close REPL with proper cleanup
+    self:safe_close_repl()
+  else
+    -- Close regular terminal
+    self:safe_close_terminal(buf)
+  end
+  
+  -- Update UI
+  require('neaterm.ui').update_bar(self)
+  
+  -- If this was the current terminal, find a new one to focus
+  if self.current_terminal == buf then
+    local terminals = vim.tbl_keys(self.terminals)
+    if #terminals > 0 then
+      self:show_terminal(terminals[1])
+    else
+      self.current_terminal = nil
+    end
+  end
 end
 
 -- Add these helper functions for floating window management
