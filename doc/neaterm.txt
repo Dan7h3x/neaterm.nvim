@@ -13,9 +13,9 @@ CONTENTS                                                    *neaterm-contents*
 ==============================================================================
 1. Introduction                                         *neaterm-introduction*
 
-Neaterm is a terminal management plugin based on tiling window managers for Neovim that provides a convenient
-way to create, manage, and interact with multiple terminal instances within
-your Neovim environment.
+Neaterm is a terminal management plugin based on tiling window managers for
+Neovim that provides a convenient way to create, manage, and interact with
+multiple terminal instances within your Neovim environment.
 
 ==============================================================================
 2. Installation                                         *neaterm-installation*
