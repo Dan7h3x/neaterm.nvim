@@ -8,14 +8,14 @@ A little (smart maybe) terminal plugin for neovim.
   <img src="https://dotfyle.com/plugins/Dan7h3x/neaterm.nvim/shield" />
 </a>
 
-## Demo
+## Demo (Old)
 
 <div class="plugin-media">
     <h3>Demo Video</h3>
     <img width="720" height="480" src="https://github.com/user-attachments/assets/46130bbc-c72b-4523-bab6-d5916e3573b3"></img>
 </div>
 
-A small example of using `neaterm` in neovim:
+A small example of using `neaterm` in neovim: (Old)
 
 ![Screenshot](https://github.com/user-attachments/assets/4edfffbe-1004-429b-bead-a2e4f4bafac4)
 
